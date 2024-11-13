@@ -1,10 +1,10 @@
 package br.com.dao;
 
-import br.com.modelo.Pedido;
-import br.com.vo.RelatorioDeVendasVo;
+import br.com.model.Pedido;
+import br.com.model.PedidoItem;
 import jakarta.persistence.EntityManager;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public class PedidoDao {
@@ -16,33 +16,54 @@ public class PedidoDao {
 	}
 
 	public void cadastrar(Pedido pedido) {
-		this.em.persist(pedido);
+		if(pedido.getItens().isEmpty())
+			throw new RuntimeException("Pedido precisa de pelo menos um item");
+		else {
+			this.em.getTransaction().begin();
+			this.em.persist(pedido);
+			this.em.getTransaction().commit();
+		}
 	}
-	
-	public BigDecimal valorTotalVendido() {
-		String jpql = "SELECT SUM(p.valorTotal) FROM Pedido p";
-		return em.createQuery(jpql, BigDecimal.class)
-				.getSingleResult();
+
+	public void atualizar(Pedido pedido){
+		this.em.getTransaction().begin();
+		this.em.merge(pedido);
+		this.em.getTransaction().commit();
 	}
-	
-	public List<RelatorioDeVendasVo> relatorioDeVendas() {
-		String jpql = "SELECT new br.com.vo.RelatorioDeVendasVo("
-				+ "produto.nome, "
-				+ "SUM(item.quantidade), "
-				+ "MAX(pedido.data)) "
-				+ "FROM Pedido pedido "
-				+ "JOIN pedido.itens item "
-				+ "JOIN item.produto produto "
-				+ "GROUP BY produto.nome "
-				+ "ORDER BY SUM(item.quantidade) DESC";
-		return em.createQuery(jpql, RelatorioDeVendasVo.class)
-				.getResultList();
+
+	public void remover(Pedido pedido){
+		this.em.getTransaction().begin();
+		this.em.remove(pedido);
+		this.em.getTransaction().commit();
 	}
-	
-	public Pedido buscarPedidoComCliente(Long id) {
-		return em.createQuery("SELECT p FROM Pedido p JOIN FETCH p.cliente WHERE p.id = :id", Pedido.class)
+
+	public void removerItem(PedidoItem pedidoItem){
+		this.em.getTransaction().begin();
+		this.em.remove(pedidoItem);
+		this.em.getTransaction().commit();
+	}
+
+	public Pedido buscarPedidoPoriD(long id){
+		String jpql = "SELECT p FROM Pedido p WHERE p.id = :id";
+		return em.createQuery(jpql, Pedido.class)
 				.setParameter("id", id)
 				.getSingleResult();
+	}
+
+	public List<Pedido> buscarPedidosPorPeriodo(LocalDate dataIni, LocalDate dataFim){
+		String jpql = "SELECT p FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+		return em.createQuery(jpql, Pedido.class)
+				.setParameter("dataIni", dataIni)
+				.setParameter("dataFim", dataFim)
+				.getResultList();
+	}
+
+	public List<Pedido> buscarPedidosDeUmCliente(Long id) {
+		//String jpql = "SELECT p FROM Pedido p JOIN FETCH p.cliente c WHERE c.id = :idCliente"; \\ou
+		String jpql = "SELECT p FROM Pedido p JOIN FETCH p.cliente WHERE p.cliente.id = :id";
+		return em.createQuery(jpql, Pedido.class)
+				.setParameter("id",id)
+				.getResultList();
 	}
 
 }

@@ -1,4 +1,4 @@
-package br.com.modelo;
+package br.com.model;
 
 import jakarta.persistence.*;
 
@@ -7,7 +7,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "produtos")
-@NamedQuery(name = "Produto.produtosPorCategoria", query = "SELECT p FROM Produto p WHERE p.categoria.nome = :nome")
+
 public class Produto {
 
 	@Id
@@ -16,7 +16,6 @@ public class Produto {
 	private String nome;
 	private String descricao;
 	private BigDecimal preco;
-	private LocalDate dataCadastro = LocalDate.now();
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	private Categoria categoria;
@@ -47,36 +46,28 @@ public class Produto {
 		this.nome = nome;
 	}
 
-	public String getDescricao() {
-		return descricao;
+	public BigDecimal getPreco() {
+		return preco;
 	}
 
 	public void setDescricao(String descricao) {
 		this.descricao = descricao;
 	}
 
-	public BigDecimal getPreco() {
-		return preco;
-	}
-
 	public void setPreco(BigDecimal preco) {
 		this.preco = preco;
 	}
 
-	public LocalDate getDataCadastro() {
-		return dataCadastro;
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Produto{")
+		.append("id=").append(id)
+		.append(", nome=").append(nome)
+		.append(", descricao=").append(descricao)
+		.append(", preco=").append(preco)
+		.append(", categoria=").append(categoria)
+		.append('}');
+		return sb.toString();
 	}
-
-	public void setDataCadastro(LocalDate dataCadastro) {
-		this.dataCadastro = dataCadastro;
-	}
-
-	public Categoria getCategoria() {
-		return categoria;
-	}
-
-	public void setCategoria(Categoria categoria) {
-		this.categoria = categoria;
-	}
-
 }

@@ -1,12 +1,12 @@
-package br.com.modelo;
+package br.com.model;
 
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "itens_pedido")
-public class ItemPedido {
+@Table(name = "pedido_itens")
+public class PedidoItem {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,10 +23,10 @@ public class ItemPedido {
 	@ManyToOne(fetch = FetchType.LAZY)
 	private Produto produto;
 
-	public ItemPedido() {
+	public PedidoItem() {
 	}
 
-	public ItemPedido(int quantidade, Pedido pedido, Produto produto) {
+	public PedidoItem(int quantidade, Pedido pedido, Produto produto) {
 		this.quantidade = quantidade;
 		this.pedido = pedido;
 		this.precoUnitario = produto.getPreco();
@@ -41,14 +41,6 @@ public class ItemPedido {
 		this.id = id;
 	}
 
-	public BigDecimal getPrecoUnitario() {
-		return precoUnitario;
-	}
-
-	public void setPrecoUnitario(BigDecimal precoUnitario) {
-		this.precoUnitario = precoUnitario;
-	}
-
 	public int getQuantidade() {
 		return quantidade;
 	}
@@ -57,20 +49,12 @@ public class ItemPedido {
 		this.quantidade = quantidade;
 	}
 
-	public Pedido getPedido() {
-		return pedido;
-	}
-
 	public void setPedido(Pedido pedido) {
 		this.pedido = pedido;
 	}
 
 	public Produto getProduto() {
 		return produto;
-	}
-
-	public void setProduto(Produto produto) {
-		this.produto = produto;
 	}
 
 	public BigDecimal getValor() {

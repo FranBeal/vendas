@@ -191,8 +191,137 @@ O ORM é a técnica que mapeia objetos de uma aplicação Java para tabelas de u
 
 É a interface principal da JPA para interagir com o banco de dados. Ele permite realizar operações de persistência, como criar, ler, atualizar e excluir objetos.
 
+### JPQL
 
-[em construção...]
+JPQL (Java Persistence Query Language) é uma linguagem de consulta orientada a objetos usada para fazer queries em bancos de dados relacionais no contexto da JPA. Assim como SQL, ela permite realizar operações de busca, inserção, atualização e exclusão, mas foi projetada para trabalhar com entidades Java em vez de tabelas relacionais. A grande vantagem da JPQL é que ela permite consultas com base no modelo de objetos, abstraindo a estrutura relacional do banco de dados. 
+
+**Principais Características:**
+
+- **Consulta a Entidades:** JPQL utiliza as classes de entidade em vez de tabelas, e seus atributos em vez de colunas.
+- **Sintaxe Similar ao SQL:** Embora seja uma linguagem orientada a objetos, JPQL tem uma sintaxe que lembra a do SQL.
+- **Portabilidade:** Como é abstraída da implementação específica do banco, JPQL é independente do sistema de gerenciamento de banco de dados.
+
+**Exemplos:**
+
+Consulta Simples: ```SELECT p FROM Produto p``` onde, ```Produto``` é uma classe de entidade, e ```p``` é um alias.
+
+Consulta com Filtro: ```SELECT p FROM Produto p WHERE p.preco > 100.0```, seleciona produtos com preço acima de 100.
+
+Consulta com JOIN: ```SELECT p FROM Pedido p JOIN p.produtos pe WHERE p.id = :pedidoId```, usa um ```JOIN``` para acessar uma lista de produtos relacionados a um pedido.
+
+Ordenação e Agrupamento: ```SELECT c.nome, SUM(p.valor) FROM Cliente c JOIN c.pedidos p GROUP BY c.nome ORDER BY SUM(p.valor) DESC```
+
+
+## O Padrão MVC
+
+O MVC (Model-View-Controller) é um padrão arquitetural que organiza uma aplicação em três componentes principais: Model, View e Controller. Cada um desses componentes é responsável por uma função específica, o que facilita a manutenção e o desenvolvimento da aplicação, além de promover a separação de responsabilidades:
+
+### Model (Modelo):
+
+Representa a lógica de negócios e os dados da aplicação. É responsável por gerenciar as regras de negócio, consultar, criar, atualizar e excluir dados. Em uma aplicação que utiliza um banco de dados, o Model frequentemente interage com o banco, mapeando as tabelas e entidades de dados. No Java, o Model pode incluir classes representando entidades (com anotações do JPA, por exemplo) e pacotes dao (Data Access Object) que manipulam a persistência de dados. 
+
+### View (Visão):
+
+Refere-se à interface de usuário (UI), ou seja, à apresentação dos dados para o usuário. Exibe os dados do Model e permite que o usuário interaja com a aplicação. Em aplicações desktop, a view pode ser representada por classes que são criadas com base em componentes do tipo Swing, por exemplo. Já em aplicações web seriam representadas, por exemplo, por páginas do tipo JSP, que são exibidas em um navegador Web.
+
+### Controller (Controlador):
+
+Atua como um intermediário entre a View e o Model. Processa as requisições do usuário (normalmente vindas da View), realiza operações no Model e retorna uma resposta para a View. Garante que a lógica de apresentação e a lógica de negócios estejam separadas, melhorando a organização e a testabilidade do código.
+
+**Fluxo no Padrão MVC:**
+
+- O usuário interage com a View (por exemplo, clicando em um botão).
+- A View envia uma requisição ao Controller, que processa essa ação.
+- O Controller, então, interage com o Model para obter ou manipular dados conforme necessário.
+- O Model realiza a operação e envia uma resposta de volta ao Controller.
+- O Controller atualiza a View com as informações adequadas para que o usuário veja o resultado da ação.
+
+## O Padrão DAO
+
+O padrão DAO (Data Access Object) é um padrão de design estrutural que separa a lógica de acesso a dados das demais camadas de uma aplicação. Sua função principal é fornecer uma interface abstrata para realizar operações no banco de dados (como inserir, atualizar, deletar e buscar dados) sem que o restante da aplicação precise se preocupar com detalhes específicos da implementação, como o tipo de banco de dados ou a linguagem de consulta.
+
+## O Padrão VO
+
+O padrão VO (Value Object) é um padrão de projeto de software que representa dados simples e imutáveis, agrupando-os em um único objeto.
+
+# Iniciando o Projeto
+
+Abra o IDE IntelliJ e acesse a opção *New Project*. Em seguida, dê o nome de Vendas para o projeto, informe a localização onde você deseja salvar o projeto. Em *Build system*, marque a opção *Maven*. Em JDK selecione a versão 21 e clique no botão *Create*. Abaixo a imagem com as configurações necessárias para o projeto:
+
+//Colocar a imagem aqui
+
+Maven é uma ferramenta de automação e gerenciamento de projetos Java, usada principalmente para gerenciar dependências, compilar código, rodar testes e empacotar a aplicação. Ele utiliza um arquivo XML chamado pom.xml (Project Object Model) para definir configurações do projeto e dependências externas. 
+
+Após criar o projeto, abra o arquivo *pom.xml*. Ele deve estar como imagem abaixo:
+
+//Colocar a imagem aqui
+
+No arquivo *pom.xml*, logo abaixo da tag <properties>...</properties>, vamos adicionar as dependências do Hibernate, do PostgreSQL e do JUnit, dentro da tag <dependencies></dependencies>. Fazendo dessa forma, o Maven vai gerenciar essas dependências, trazendo automaticamente para o projeto as bibliotecas externas (.jar). A imagem abaixo mostra o arquivo com as dependências informadas (circuladas em vermelho):
+
+//Colocar a imagem aqui
+
+Após inserir as dependências no arquivo, clique no botão do “m” azul, que está circulado na imagem acima, para atualizar as dependências e baixar as bibliotecas no projeto.
+
+Essas dependências, e outras mais, podem ser encontradas no repositório Maven Repository disponível endereço https://mvnrepository.com/.
+
+Na sequência, na pasta *resources* do projeto, vamos criar a pasta **META-INF** e dentro dela criar o arquivo *persistence.xml*. Nesse arquivo, vamos configurar as propriedades para conectar-se ao banco de dados PostgreSQL.
+
+//Colocar o código do aqui
+
+O arquivo *persistence.xml* é fundamental para configurar a persistência de dados em aplicações Java que utilizam JPA com um provedor ORM, como o Hibernate. Ele define as configurações da unidade de persistência e as propriedades relacionadas ao banco de dados:
+
+   • ```<persistence version="2.1" ...>```, versão 2.1 da JPA.
+   
+   • ```persistence-unit```, define a unidade de persistência. Cada ```persistence-unit``` recebe um nome, no caso do projeto Vendas, é ```"PostgresPU"```. Esse nome é usado para identificar essa configuração dentro da aplicação. A ```transaction-type``` é o tipo de transação e é ```"RESOURCE_LOCAL"```, que significa que as transações serão gerenciadas pela própria aplicação e não por um servidor de aplicações. 
+     
+  • ```<properties> </properties>```, contém as configurações de conexão e outros detalhes importantes para o JPA/Hibernate, tais como: 
+  
+   ◦ Driver do banco de dados: ```<property name="javax.persistence.jdbc.driver" value="org.postgresql.Driver" /> ```
+   
+   ◦ Url de conexão: ```<property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost/playlistdb" /> ```
+   
+   ◦ Usuário e senha: 
+   
+   ```<property name="javax.persistence.jdbc.user" value="postgres" /> ```
+   
+   ```<property name="javax.persistence.jdbc.password" value="postgres" /> ```
+   
+   ◦ Dialeto do Hibernate que define o dialeto SQL que o Hibernate deve usar, o que garante a geração correta das queries para o banco PostgreSQL: ```<property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect"/> ```
+   
+   ◦ Estratégia de gerenciamento de schema, que configura como o Hibernate deve lidar com o esquema de banco de dados. No caso de ```"update"```, ele atualiza as tabelas sem apagá-las. Outras opções incluem: ```“create"``` cria as tabelas, sobrescrevendo as existentes, ```"create-drop"``` cria as tabelas e as apaga ao final da sessão, e, ```"validate"``` apenas valida se o esquema está correto, sem modificá-lo.
+   ```<property name="hibernate.hbm2ddl.auto" value="update" /> ```
+   
+   ◦ Exibição de SQL no console, define se as queries SQL geradas pelo Hibernate serão exibidas no console e se serão formatadas para melhor legibilidade. 
+   
+   ```<property name="hibernate.show_sql" value="true" /> ```
+   
+   ```<property name="hibernate.format_sql" value="true" /> ```
+
+## Estrutura do Projeto
+
+O projeto será organizado nos seguintes pacotes:
+
+   • **model:** Contém as classes de entidade.
+    
+   • **dao:** Contém as classes de acesso a dados.
+    
+   • **service:** Contém as classes com a lógica do negócio
+    
+   • **vo:** Contém classes que representam resumos e relatórios de dados
+    
+   • **util:** Contém a classe de utilitário para JPA.
+    
+   • **test:** Contém os testes unitários.
+    
+    
+Após criar os pacotes indicados acima, a estrutura do projeto deverá estar como na imagem abaixo: 
+
+//Colocar a imagem aqui
+
+
+
+
+Em construção...
 
 
 

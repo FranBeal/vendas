@@ -248,25 +248,51 @@ O padrão VO (Value Object) é um padrão de projeto de software que representa 
 
 Abra o IDE IntelliJ e acesse a opção *New Project*. Em seguida, dê o nome de Vendas para o projeto, informe a localização onde você deseja salvar o projeto. Em *Build system*, marque a opção *Maven*. Em JDK selecione a versão 21 e clique no botão *Create*. Abaixo a imagem com as configurações necessárias para o projeto:
 
-//Colocar a imagem aqui
+![image](https://github.com/user-attachments/assets/7b32c574-f8bf-43f0-9414-2d11e3c64718)
+
 
 Maven é uma ferramenta de automação e gerenciamento de projetos Java, usada principalmente para gerenciar dependências, compilar código, rodar testes e empacotar a aplicação. Ele utiliza um arquivo XML chamado pom.xml (Project Object Model) para definir configurações do projeto e dependências externas. 
 
 Após criar o projeto, abra o arquivo *pom.xml*. Ele deve estar como imagem abaixo:
 
-//Colocar a imagem aqui
+![image](https://github.com/user-attachments/assets/1cdb4875-f6ae-4457-8548-96455f5dee74)
 
-No arquivo *pom.xml*, logo abaixo da tag <properties>...</properties>, vamos adicionar as dependências do Hibernate, do PostgreSQL e do JUnit, dentro da tag <dependencies></dependencies>. Fazendo dessa forma, o Maven vai gerenciar essas dependências, trazendo automaticamente para o projeto as bibliotecas externas (.jar). A imagem abaixo mostra o arquivo com as dependências informadas (circuladas em vermelho):
 
-//Colocar a imagem aqui
+No arquivo *pom.xml*, logo abaixo da tag ```<properties>...</properties>```, vamos adicionar as dependências do Hibernate, do PostgreSQL e do JUnit, dentro da tag ```<dependencies></dependencies>```. Fazendo dessa forma, o Maven vai gerenciar essas dependências, trazendo automaticamente para o projeto as bibliotecas externas (.jar). A imagem abaixo mostra o arquivo com as dependências informadas (circuladas em vermelho):
 
-Após inserir as dependências no arquivo, clique no botão do “m” azul, que está circulado na imagem acima, para atualizar as dependências e baixar as bibliotecas no projeto.
+![image](https://github.com/user-attachments/assets/ba28c521-dc48-484a-b650-352e720a8729)
+
+
+Após inserir as dependências no arquivo, clique no botão do “m” azul, que está circulado de vermelhor na imagem acima, para atualizar as dependências e baixar as bibliotecas no projeto.
 
 Essas dependências, e outras mais, podem ser encontradas no repositório Maven Repository disponível endereço https://mvnrepository.com/.
 
-Na sequência, na pasta *resources* do projeto, vamos criar a pasta **META-INF** e dentro dela criar o arquivo *persistence.xml*. Nesse arquivo, vamos configurar as propriedades para conectar-se ao banco de dados PostgreSQL.
+Na sequência, na pasta *resources* do projeto, vamos criar a pasta **META-INF** e dentro dela criar o arquivo *persistence.xml*. Nesse arquivo, vamos configurar as propriedades para conectar-se ao banco de dados PostgreSQL:
 
-//Colocar o código do aqui
+```xml
+<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.1" xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd">
+    <persistence-unit name="PostgresPU" transaction-type="RESOURCE_LOCAL">
+        <properties>
+            <property name="javax.persistence.jdbc.driver" value="org.postgresql.Driver"/>
+            <!--  DB Driver  -->
+            <property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost/Pedidos"/>
+            <!--  BD url  -->
+            <property name="javax.persistence.jdbc.user" value="postgres"/>
+            <!--  DB User  -->
+            <property name="javax.persistence.jdbc.password" value="postgres"/>
+            <!--  DB Password  -->
+            <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect"/>
+            <!--  DB Dialect  -->
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+            <!--  create / create-drop / update  -->
+            <property name="hibernate.show_sql" value="true"/>
+            <!--  Show SQL in console  -->
+            <property name="hibernate.format_sql" value="true"/>
+            <!--  Show SQL formatted  -->
+        </properties>
+    </persistence-unit>
+</persistence>
+```
 
 O arquivo *persistence.xml* é fundamental para configurar a persistência de dados em aplicações Java que utilizam JPA com um provedor ORM, como o Hibernate. Ele define as configurações da unidade de persistência e as propriedades relacionadas ao banco de dados:
 
@@ -278,7 +304,7 @@ O arquivo *persistence.xml* é fundamental para configurar a persistência de da
   
    ◦ Driver do banco de dados: ```<property name="javax.persistence.jdbc.driver" value="org.postgresql.Driver" /> ```
    
-   ◦ Url de conexão: ```<property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost/playlistdb" /> ```
+   ◦ Url de conexão: ```<property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost/Pedidos" /> ```
    
    ◦ Usuário e senha: 
    
@@ -296,6 +322,15 @@ O arquivo *persistence.xml* é fundamental para configurar a persistência de da
    ```<property name="hibernate.show_sql" value="true" /> ```
    
    ```<property name="hibernate.format_sql" value="true" /> ```
+
+Antes de dar continuidade no projeto, será criado o banco de dados no PostgreSQL. Apenas o banco, pois as tabelas serão criadas automaticamente pela aplicação. Para isso, pode ser utilizado o PGAdmin, ou outro administrador de banco de dados que tenha conexão com o PostgreSQL. O nome do banco de dados deverá ser **Pedidos**.
+
+Caso tenha dúvidas, ou dificuldades, com o processo de instalação do PostgreSQL, ou com o processo para criar a base de dados **Pedidos**, sugere-se consultar os links a seguir:
+
+- Vídeo em https://www.youtube.com/watch?v=His77sqWfGU (duração 00:06:23) que ensina como instalar e configurar o PostgreSQL.
+
+- Vídeo em https://www.youtube.com/watch?v=bA2nW6PFlio (duração 00:07:56) que ensina a criar um BD usando o PGAdmin.
+
 
 ## Estrutura do Projeto
 
@@ -316,10 +351,418 @@ O projeto será organizado nos seguintes pacotes:
     
 Após criar os pacotes indicados acima, a estrutura do projeto deverá estar como na imagem abaixo: 
 
-//Colocar a imagem aqui
+![image](https://github.com/user-attachments/assets/2615c9d0-a958-4577-80e8-18e62680ccbc)
 
+A estrutura usada neste projeto, não segue a arquitetura clássica do MVC. Porém, a ideia da separação das responsabilidades está presente. 
 
+Por ser uma aplicação por linha de comando, classes de camada View não estão presentes. A função Main "desempenha" o papel de Controller, ela recebe as ações do usuário, processa e envia para as classes services. As classes services possuem as regras do negócio e interagem com as classes DAO. Já as classes DAO possuem acesso aos dados e interagem com as classes de entidades. As classes service, DAO e entidades são representaçãoes de classes de camada Model.
 
+Agora, será dado o início da crição das classes do projeto. Primeiramente, serão criadas as classes entidades (Entity). As classes do tipo entidades possuem atributos e relacionamentos que serão persistidos no banco de dados. Elas devem ser criadas no pacote **model**:
+
+### Classe Categoria:
+
+```java
+package br.com.model;
+
+// Importação das anotações necessárias do JPA (Java Persistence API).
+import jakarta.persistence.*;
+
+@Entity // Define que a classe é uma entidade JPA, ou seja, será mapeada para uma tabela no banco de dados.
+@Table(name = "categorias") // Define o nome da tabela no banco de dados que essa entidade irá representar. 
+// Neste caso, a tabela 'categorias'.
+public class Categoria {
+
+    // Atributo que será usado como chave primária na tabela do banco de dados.
+    @Id // Indica que o campo 'id' é a chave primária da tabela.
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Define a estratégia de geração do valor da chave primária. 
+                                                        // 'IDENTITY' significa que o valor será gerado automaticamente 
+                                                        // pelo banco de dados.
+    private Long id;
+
+    // Atributo que armazena o nome da categoria. Este será um campo na tabela 'categorias'.
+    private String nome;
+
+    // Construtor padrão sem parâmetros. Necessário para que o JPA possa instanciar a classe ao recuperar dados do BD.
+    public Categoria() {}
+
+    // Construtor com o parâmetro 'nome'. Permite criar uma instância de 'Categoria' com um nome específico.
+    public Categoria(String nome) {
+        this.nome = nome;
+    }
+
+    public String getNome() {
+        return nome;
+    }
+
+    public void setNome(String nome) {
+        this.nome = nome;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    // Sobrescrita do metodo 'toString', usado para retornar uma representação em String da instância da classe.
+    // Isso é útil para depuração e exibição de dados da entidade de forma legível.
+    @Override
+    public String toString() {
+        // StringBuilder é utilizado para construir a string de forma eficiente.
+        StringBuilder sb = new StringBuilder();
+        sb.append("Categoria{") 
+                .append("id=").append(id) 
+                .append(", nome=").append(nome) 
+                .append('}'); 
+        return sb.toString(); 
+    }
+}
+```
+### Classe Produto:
+
+```java
+package br.com.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal; // Tipo de dado para manipulação de valores monetários com precisão.
+import java.time.LocalDate; // Tipo de dado para trabalhar com datas.
+
+@Entity // Indica que esta classe é uma entidade JPA e será mapeada para uma tabela no banco de dados.
+@Table(name = "produtos") // Define o nome da tabela que esta entidade representa, no caso 'produtos'.
+public class Produto {
+
+	@Id // Define o campo 'id' como a chave primária da entidade.
+	@GeneratedValue(strategy = GenerationType.IDENTITY) // Configura a geração automática do valor do 'id' pelo banco de dados.
+	private Long id;
+
+	// Campos simples que representam colunas da tabela no banco de dados.
+	private String nome; // Nome do produto.
+	private String descricao; // Breve descrição do produto.
+	private BigDecimal preco; // Preço do produto, utilizando BigDecimal para precisão em cálculos financeiros.
+
+	@ManyToOne(fetch = FetchType.LAZY) // Relacionamento muitos-para-um com a entidade Categoria. 'fetch = FetchType.LAZY' indica carregamento tardio.
+	@JoinColumn(name = "categoria_id") // Define a chave estrangeira que associa o produto à sua categoria.
+	private Categoria categoria; // Referência à entidade Categoria.
+
+	public Produto() {
+	}
+
+	public Produto(String nome, String descricao, BigDecimal preco, Categoria categoria) {
+		this.nome = nome;
+		this.descricao = descricao;
+		this.preco = preco;
+		this.categoria = categoria;
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public String getNome() {
+		return nome;
+	}
+
+	public void setNome(String nome) {
+		this.nome = nome;
+	}
+
+	public String getDescricao() {
+		return descricao;
+	}
+
+	public void setDescricao(String descricao) {
+		this.descricao = descricao;
+	}
+
+	public BigDecimal getPreco() {
+		return preco;
+	}
+
+	public void setPreco(BigDecimal preco) {
+		this.preco = preco;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Produto{")
+		  .append("id=").append(id) 
+		  .append(", nome=").append(nome) 
+		  .append(", descricao=").append(descricao) 
+		  .append(", preco=").append(preco) 
+		  .append(", categoria=").append(categoria) 
+		  .append('}');
+		return sb.toString(); 
+	}
+}
+```
+
+Comentários sobre a classe Produto:
+
+**Relacionamento @ManyToOne:** O atributo categoria estabelece uma relação muitos-para-um com a classe Categoria. Isso significa que vários produtos podem pertencer a uma mesma categoria. A anotação ```@JoinColumn``` especifica o nome da coluna no banco que representa essa relação (categoria_id).
+
+**Lazy Loading:** A configuração ```fetch = FetchType.LAZY``` no relacionamento indica que os dados da categoria serão carregados apenas quando forem acessados explicitamente. Isso otimiza o uso de recursos, especialmente quando as relações têm muitos dados.
+
+**BigDecimal:** Usado para valores monetários e cálculos financeiros devido à sua alta precisão, essencial em sistemas que lidam com preços.
+
+### Classe Cliente:
+
+```java
+package br.com.model;
+
+import jakarta.persistence.*;
+
+@Entity 
+@Table(name = "clientes")
+public class Cliente {
+
+    @Id 
+    @GeneratedValue(strategy = GenerationType.IDENTITY) 
+    private Long id;
+
+    private String nome;
+    private String cpf;
+
+    public Cliente() {
+    }
+    
+    public Cliente(String nome, String cpf) {
+        this.nome = nome;
+        this.cpf = cpf;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getNome() {
+        return nome;
+    }
+
+    public void setNome(String nome) {
+        this.nome = nome;
+    }
+
+    public String getCpf() {
+        return cpf;
+    }
+
+    public void setCpf(String cpf) {
+        this.cpf = cpf;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Cliente{")
+                .append("id=").append(id)
+                .append("nome=").append(nome)
+                .append("CPF=").append(cpf)
+                .append('}');
+        return sb.toString();
+    }
+}
+```
+
+### Classe Pedido:
+
+```java
+package br.com.model;
+
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Entity
+@Table(name = "pedidos")
+public class Pedido {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "valor_total") // Define o nome da coluna no banco como 'valor_total'.
+    private BigDecimal valorTotal = BigDecimal.ZERO; // Armazena o valor total do pedido, iniciando com zero.
+
+    private LocalDate data = LocalDate.now(); // Armazena a data do pedido, inicializando com a data atual.
+
+    @ManyToOne(fetch = FetchType.LAZY) // Relacionamento muitos-para-um com a entidade Cliente.
+    private Cliente cliente; // Cliente associado ao pedido.
+
+    @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL) // Relacionamento um-para-muitos com a entidade PedidoItem.
+    private List<PedidoItem> itens = new ArrayList<>(); // Lista de itens do pedido.
+
+    public Pedido() {
+    }
+
+    // Construtor que inicializa o pedido com um cliente.
+    public Pedido(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    // Metodo para adicionar um item ao pedido.
+    public void adicionarItem(PedidoItem item) {
+        item.setPedido(this); // Define a referência do pedido no item.
+        this.getItens().add(item); // Adiciona o item à lista.
+        processaValorTotal(); // Atualiza o valor total do pedido.
+    }
+
+    // Metodo para remover um item do pedido.
+    public void removerItem(PedidoItem item) {
+        this.getItens().remove(item); // Remove o item da lista.
+        processaValorTotal(); // Atualiza o valor total do pedido.
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public BigDecimal getValorTotal() {
+        return valorTotal;
+    }
+
+    public void setData(LocalDate data) {
+        this.data = data;
+    }
+
+    public List<PedidoItem> getItens() {
+        return itens;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Pedido{")
+                .append("id=").append(id)
+                .append(", valorTotal=").append(valorTotal)
+                .append(", data=").append(data)
+                .append(", cliente=").append(cliente.getNome())
+                .append(", itens=[");
+
+        for (int i = 0; i < itens.size(); i++) {
+            PedidoItem item = itens.get(i);
+            sb.append("{")
+                    .append("produto=").append(item.getProduto().getNome())
+                    .append(", quantidade=").append(item.getQuantidade())
+                    .append(", valor=").append(item.getValor())
+                    .append("}");
+            if (i < itens.size() - 1) {
+                sb.append(", ");
+            }
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    // Metodo privado para calcular e atualizar o valor total do pedido com base nos itens.
+    private void processaValorTotal() {
+        BigDecimal total = itens.stream() // Processa a lista de itens.
+                .map(PedidoItem::getValor) // Mapeia os valores dos itens.
+                .reduce(BigDecimal.ZERO, BigDecimal::add); // Soma os valores.
+        this.valorTotal = total; // Atualiza o valor total do pedido.
+    }
+}
+```
+
+Comentários sobre a classe Pedido:
+
+**Relacionamento @ManyToOne com Cliente:** Indica que vários pedidos podem pertencer a um único cliente. Utiliza carregamento lazy para otimizar o uso de memória, carregando o cliente apenas quando necessário.
+
+**Relacionamento @OneToMany com PedidoItem:** Define que um pedido pode conter vários itens. A anotação ```cascade = CascadeType.ALL``` garante que operações no pedido (como salvar ou deletar) serão propagadas para seus itens.
+
+**Cálculo do valor total:** Feito no método ```processaValorTotal``` com Streams, que iteram sobre os itens e somam seus valores.
+
+### Classe PedidoItem:
+
+```java
+package br.com.model;
+
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+
+@Entity 
+@Table(name = "pedido_itens") 
+public class PedidoItem {
+
+    @Id 
+    @GeneratedValue(strategy = GenerationType.IDENTITY) 
+    private Long id;
+
+    @Column(name = "preco_unitario") // Mapeia o atributo para a coluna 'preco_unitario' no banco.
+    private BigDecimal precoUnitario; 
+
+    private int quantidade; 
+
+    @ManyToOne(fetch = FetchType.LAZY) // Relacionamento muitos-para-um com a entidade Pedido.
+    private Pedido pedido; // Pedido ao qual este item pertence.
+
+    @ManyToOne(fetch = FetchType.LAZY) // Relacionamento muitos-para-um com a entidade Produto.
+    private Produto produto; // Produto relacionado a este item.
+
+    public PedidoItem() {
+    }
+
+    public PedidoItem(int quantidade, Pedido pedido, Produto produto) {
+        this.quantidade = quantidade; 
+        this.pedido = pedido; 
+        this.precoUnitario = produto.getPreco(); 
+        this.produto = produto; 
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public int getQuantidade() {
+        return quantidade;
+    }
+
+    public void setQuantidade(int quantidade) {
+        this.quantidade = quantidade;
+    }
+
+    public void setPedido(Pedido pedido) {
+        this.pedido = pedido;
+    }
+
+    public Produto getProduto() {
+        return produto;
+    }
+
+    // Calcula e retorna o valor total do item (preço unitário * quantidade).
+    public BigDecimal getValor() {
+        return precoUnitario.multiply(new BigDecimal(quantidade));
+    }
+}
+```
+
+Comentários sobre a classe PedidoItem:
+
+**Relacionamento com Pedido e Produto:** O ```@ManyToOne``` indica que vários itens podem estar associados ao mesmo pedido ou produto.
+O carregamento lazy (```fetch = FetchType.LAZY```) evita carregar automaticamente os dados de Pedido e Produto até que sejam acessados.
+
+**Cálculo do valor total:** O método ```getValor()``` retorna o valor total do item, calculado como precoUnitario * quantidade.
+
+Com as classes definidas e mapeadas para Entity, agora serão definidas as classes para acesso aos dados, as classes DAO. Elas devem ser criadas no pacote **dao**.
 
 Em construção...
 

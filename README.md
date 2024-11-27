@@ -764,7 +764,1592 @@ O carregamento lazy (```fetch = FetchType.LAZY```) evita carregar automaticament
 
 Com as classes definidas e mapeadas para Entity, agora serão definidas as classes para acesso aos dados, as classes DAO. Elas devem ser criadas no pacote **dao**.
 
-Em construção...
+Antes de criar as classes DAO, criaremos uma classe utilitária para gerenciar a criação de EntityManager, usada para operações com o banco de dados. Essa classe será criada dentro de um novo pacote chamado util.
+```java
+package br.com.util;
+
+// Importação das classes necessárias para gerenciar entidades no JPA.
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
+
+// Classe utilitária para gerenciar a criação de EntityManager, usada para operações com o banco de dados.
+public class JPAUtil {
+
+	// Criação de uma única instância de EntityManagerFactory para gerenciar a conexão com o banco.
+	// O "PostgresPU" deve corresponder ao nome da unidade de persistência definida no arquivo persistence.xml.
+	private static final EntityManagerFactory FACTORY = Persistence
+			.createEntityManagerFactory("PostgresPU");
+
+	// Metodo para obter um EntityManager, cada chamada cria uma nova instância de EntityManager
+	// a partir do EntityManagerFactory.
+	public static EntityManager getEntityManager() {
+
+		return FACTORY.createEntityManager();
+	}
+	
+}
+```
+
+Como já descrito anteriormente, as classes DAO são dedicadas a gerenciar a interação entre a aplicação e o banco de dados. Elas encapsulam toda a lógica de acesso aos dados, como consultas, inserções, atualizações e exclusões, promovendo a separação de responsabilidades no código. Ao centralizar essas operações, as classes DAO tornam o sistema mais organizado, facilitam a manutenção e permitem que outras camadas da aplicação (como a de negócio ou a de apresentação) permaneçam desacopladas da lógica de persistência, garantindo maior modularidade e flexibilidade no desenvolvimento. 
+
+Para entender os métodos que serão utilizados pelas classes DAO, vamos antes entender sobre a EntityManager e seus estados.
+
+## EntityManager
+
+A EntityManager é a principal interface do JPA usada para gerenciar entidades e realizar operações com o banco de dados. Os principais métodos do EntityManager e suas finalidades são:
+
+### 1. Gerenciamento de Entidades
+- persist(Object entity): Persiste (insere) uma nova entidade no banco de dados. A entidade deve estar no estado transiente (não gerenciada pelo contexto de persistência).
+- merge(Object entity): Atualiza os dados de uma entidade no banco de dados. Usado para entidades no estado desanexado (detached) para sincronizá-las novamente com o banco.
+- remove(Object entity): Remove uma entidade gerenciada do banco de dados. A entidade deve estar no estado gerenciado (managed).
+- find(Class<T> entityClass, Object primaryKey): Busca uma entidade no banco de dados pelo seu identificador (chave primária). Retorna a entidade no estado gerenciado, ou null se não for encontrada.
+- contains(Object entity): Verifica se uma entidade está no estado gerenciado pelo contexto de persistência.
+
+### 2. Gerenciamento de Transações
+- getTransaction(): Retorna o objeto EntityTransaction, permitindo gerenciar transações explicitamente em contextos não gerenciados pelo contêiner (Java SE).
+- flush(): Sincroniza o estado do contexto de persistência com o banco de dados (envia as alterações pendentes).
+- clear(): Remove todas as entidades do contexto de persistência, deixando-as no estado desanexado.
+- close(): Fecha o EntityManager, liberando todos os recursos associados.
+- lock(Object entity, LockModeType lockMode): Aplica um bloqueio a uma entidade gerenciada para garantir consistência em cenários de concorrência.
+  
+### 3. Consultas
+- createQuery(String jpql, Class<T> resultClass): Cria uma consulta usando JPQL (Java Persistence Query Language) e especifica o tipo do resultado esperado.
+- createNamedQuery(String name, Class<T> resultClass): Cria uma consulta predefinida usando o nome registrado em uma entidade.
+- createNativeQuery(String sql): Cria uma consulta usando SQL nativo, permitindo maior controle e flexibilidade para casos específicos.
+- getReference(Class<T> entityClass, Object primaryKey): Retorna uma instância proxy de uma entidade pelo seu identificador, sem carregar os dados imediatamente (carregamento lazy).
+
+Esses métodos permitem gerenciar o ciclo de vida das entidades, realizar operações CRUD e interagir com o banco de dados de forma eficiente e controlada. A seguir, são apresentados os estados que as entidades passam durante o ciclo de vida.
+
+### Os Estados das Entidades na JPA
+
+Na JPA, as entidades passam por diferentes estados durante seu ciclo de vida.A seguir, serão explorados os estados: transiente, gerenciado, desanexado (detached) e removido:
+
+### Estado Transiente
+Uma entidade está no estado transiente quando foi criada na memória, mas ainda não foi associada ao banco de dados nem ao contexto de persistência do JPA.
+Uma entidade recém-criada, que não possui um identificador ou chave primária, ou seja, não está em sincronia com o banco de dados. Exemplo:
+```java
+Categoria categoria = new Categoria(); // Entidade no estado transiente.
+categoria.setNome("Tecnologia"); // Modificação em memória, sem relação com o banco.
+```
+
+### Estado Gerenciado
+Uma entidade está no estado gerenciado quando está sendo acompanhada pelo EntityManager. Nesse estado, o JPA sincroniza automaticamente as alterações realizadas na entidade com o banco de dados durante a transação. Isso ocorre quando a entidade em memória está associada a um registro específico da tabela no banco (identificada por um ID). Enquanto permanece nesse estado, a entidade é controlada pelo Contexto de Persistência, permitindo que qualquer modificação feita nela seja detectada pelo Hibernate, que então traduz e sincroniza as mudanças com o banco de dados. 
+Uma entidade se torna gerenciada quando:
+- Ao ser persistida com o método persist().
+- Ao ser recuperada do banco de dados com find() ou createQuery().
+- Ao ser associada novamente com merge().
+
+Exemplo:
+```java
+EntityManager em = JPAUtil.getEntityManager();
+Categoria categoria = new Categoria();
+categoria.setNome("Tecnologia");
+
+em.getTransaction().begin();
+em.persist(categoria); // Agora a entidade está gerenciada.
+em.getTransaction().commit(); // Alterações são salvas no banco.
+```
+
+### Estado Detached (desanexado)
+Uma entidade está no estado detached quando foi gerenciada anteriormente, mas agora não está mais associada ao contexto de persistência. É quando a entidade é removida do Contexto de Persistência, então a entidade não tem suas alterações em memoria propagadas ao banco de dados. Isso pode acontecer, por exemplo, quando o EntityManager é fechado ou a entidade é explicitamente desanexada. 
+Uma entidade se torna desanexada quando:
+
+- Quando o método detach() é chamado.
+- Quando o contexto de persistência é limpo com clear() ou fechado com close().
+- Quando a entidade foi recuperada, mas o EntityManager já foi encerrado.
+
+Exemplo:
+```java
+EntityManager em = JPAUtil.getEntityManager();
+Categoria categoria = em.find(Categoria.class, 1L); // Entidade gerenciada.
+
+em.close(); // O EntityManager é fechado.
+categoria.setNome("Atualizado"); // Modificação em memória, mas não será salva no banco.
+```
+### Estado Removido
+Uma entidade está no estado removido quando foi marcada para exclusão no banco de dados, mas a exclusão ainda não foi confirmada (geralmente até o commit da transação). Isso ocorre quando o método remove() é chamado em uma entidade gerenciada. Nesse estado:
+- A entidade continua vinculada ao contexto de persistência.
+- Não será mais considerada nas operações de sincronização, exceto para ser excluída no banco de dados.
+- Após a exclusão, a entidade pode se tornar transiente.
+
+Exemplo:
+```java
+EntityManager em = JPAUtil.getEntityManager();
+Categoria categoria = em.find(Categoria.class, 1L); // Entidade gerenciada.
+em.getTransaction().begin();
+em.remove(categoria); // Agora a entidade está no estado removido.
+em.getTransaction().commit(); // Exclusão confirmada no banco de dados.
+```
+
+### Comparação dos Estados:
+
+A tabela abaixo resume os principais estados e suas características:
+
+| **Estado**    | **Persistido no Banco?** | **Monitorado pelo JPA?** | **Alterações Sincronizadas?** | **Exemplo de Transição**                    |
+|---------------|---------------------------|---------------------------|-------------------------------|---------------------------------------------|
+| **Transiente** | Não                      | Não                      | Não                          | Nova entidade criada com `new`.            |
+| **Gerenciado** | Sim                      | Sim                      | Sim                          | Após `persist()`, `merg()` ou `find()`.    |
+| **Desanexado** | Sim                      | Não                      | Não                          | Após `detach()`, `clear()` ou `close()`.   |
+| **Removido**   | Sim (até commit)         | Sim                      | Não                          | Após `remove()` em uma entidade gerenciada.|
+
+### Resumo dos Estados
+
+- **Transiente**: A entidade existe apenas na memória e não está associada ao banco de dados nem ao contexto de persistência.
+- **Gerenciado**: A entidade está associada ao contexto de persistência, e suas alterações são sincronizadas automaticamente com o banco de dados.
+- **Desanexado**: A entidade foi removida do contexto de persistência, mas ainda existe no banco. Alterações nela não serão sincronizadas.
+- **Removido**: A entidade está marcada para exclusão no banco, mas a exclusão só será efetivada após o `commit` da transação.
+
+A Figura abaixo mostra um diagrama que ilustra como uma entidade transita de um estado para outro e quais operações do EntityManager são propagadas:
+
+![image](https://github.com/user-attachments/assets/6cf31c4b-b6b5-4ffe-b8a0-2dded85c1d7e)
+
+**Fonte:** [Vlad Mihalcea](https://x.com/vlad_mihalcea) em [Dev.to](https://dev.to/jordihofc/3-dicas-para-uso-eficiente-de-jpahibernate-42f9)
+
+
+## Classes DAO
+
+A seguir, serão apresentadas as classes DAO do projeto Vendas, iniciando pela CategoriaDao (que deverá ser criada dentro do pacote dao):
+```java
+package br.com.dao;
+
+import br.com.model.Categoria;
+import jakarta.persistence.EntityManager;
+
+import java.util.List;
+
+// Classe DAO (Data Access Object) para gerenciar as operações de persistência da entidade Categoria.
+public class CategoriaDao {
+
+	// Instância de EntityManager, usada para realizar as operações no banco de dados.
+	private EntityManager em;
+
+	// Construtor que recebe um EntityManager como parâmetro.
+	public CategoriaDao(EntityManager em) {
+		this.em = em;
+	}
+
+	// Metodo para cadastrar uma nova categoria no banco de dados.
+	public void cadastrar(Categoria categoria) {
+		this.em.getTransaction().begin(); // Inicia uma transação.
+		this.em.persist(categoria); // Persiste a entidade no banco de dados.
+		this.em.getTransaction().commit(); // Finaliza a transação e salva as alterações.
+	}
+
+	// Metodo para atualizar uma categoria existente no banco de dados.
+	public void atualizar(Categoria categoria) {
+		this.em.getTransaction().begin();// Inicia uma transação.
+		this.em.merge(categoria);// Atualiza a entidade no banco de dados.
+		this.em.getTransaction().commit();// Finaliza a transação e salva as alterações.
+	}
+
+	// Metodo para remover uma categoria do banco de dados.
+	public void remover(Categoria categoria) {
+		this.em.getTransaction().begin();// Inicia uma transação.
+		this.em.remove(categoria);// Remove a entidade do banco de dados.
+		this.em.getTransaction().commit();// Finaliza a transação e salva as alterações.
+	}
+
+	// Metodo para buscar uma categoria pelo seu ID.
+	public Categoria buscarPorId(Long id) {
+		return em.find(Categoria.class, id);// Busca a entidade Categoria pelo ID.
+	}
+
+	// Metodo para buscar todas as categorias no banco de dados.
+	public List<Categoria> buscarTodos() {
+		String jpql = "SELECT c FROM Categoria c"; // Consulta JPQL para retornar todas as categorias.
+		return em.createQuery(jpql, Categoria.class).getResultList(); // Executa a consulta e retorna os resultados.
+	}
+
+	// Metodo para buscar categorias pelo nome.
+	public List<Categoria> buscarPorNome(String nome) {
+		String jpql = "SELECT c FROM Categoria c WHERE c.nome = :nome"; // Consulta JPQL para buscar categorias por nome.
+		return em.createQuery(jpql, Categoria.class)
+				.setParameter("nome", nome) // Define o parâmetro "nome" na consulta.
+				.getResultList(); // Executa a consulta e retorna os resultados.
+	}
+}
+```
+### Classe ClienteDao
+A classe ClienteDao é semelhante a CategoriaDao, a lógica para implementar os métodos atualizar e remover, é a mesma.
+```java
+package br.com.dao;
+
+import br.com.model.Cliente;
+import jakarta.persistence.EntityManager;
+
+import java.util.List;
+
+public class ClienteDao {
+
+	private EntityManager em;
+
+	public ClienteDao(EntityManager em) {
+		this.em = em;
+	}
+
+	public void cadastrar(Cliente cliente) {
+		this.em.persist(cliente);
+	}
+	
+	public Cliente buscarPorId(Long id) {
+		return em.find(Cliente.class, id);
+	}
+
+	public List<Cliente> buscarTodos() {
+		String jpql = "SELECT c FROM Cliente c";
+		return em.createQuery(jpql, Cliente.class).getResultList();
+	}
+}
+```
+
+### Classe ProdutoDao
+
+```java
+public class ProdutoDao {
+
+	private EntityManager em;
+
+	public ProdutoDao(EntityManager em) {
+		this.em = em;
+	}
+
+	public void cadastrar(Produto produto) {
+		this.em.getTransaction().begin();
+		this.em.persist(produto);
+		this.em.getTransaction().commit();
+	}
+
+	public void atualizar(Produto produto) {
+		this.em.getTransaction().begin();
+		this.em.merge(produto);
+		this.em.getTransaction().commit();
+	}
+
+	public void remover(Produto produto) {
+		this.em.getTransaction().begin();
+		this.em.remove(produto);
+		this.em.getTransaction().commit();
+	}
+	
+	public Produto buscarPorId(Long id) {
+		return em.find(Produto.class, id);
+	}
+	
+	public List<Produto> buscarTodos() {
+		String jpql = "SELECT p FROM Produto p";
+		return em.createQuery(jpql, Produto.class).getResultList();
+	}
+	
+	public List<Produto> buscarPorNome(String nome) {
+		String jpql = "SELECT p FROM Produto p WHERE p.nome = :nome";
+		return em.createQuery(jpql, Produto.class)
+				.setParameter("nome", nome)
+				.getResultList();
+	}
+
+	public List<Produto> buscarPorCategoria(long idCategoria) {
+		String jpql = "SELECT p FROM Produto p WHERE p.categoria.id = :id";
+		//String jpql = "SELECT p FROM Produto p JOIN p.categoria c WHERE c.id = :id"; //ou
+		return em.createQuery(jpql, Produto.class)
+				.setParameter("id", idCategoria)
+				.getResultList();
+	}
+}
+```
+
+### Classe PedidoDao
+
+```java
+public class PedidoDao {
+
+	private EntityManager em;
+
+	public PedidoDao(EntityManager em) {
+		this.em = em;
+	}
+
+	public void cadastrar(Pedido pedido) {
+		if(pedido.getItens().isEmpty())
+			throw new RuntimeException("Pedido precisa de pelo menos um item");
+		else {
+			this.em.getTransaction().begin();
+			this.em.persist(pedido);
+			this.em.getTransaction().commit();
+		}
+	}
+
+	public void atualizar(Pedido pedido){
+		this.em.getTransaction().begin();
+		this.em.merge(pedido);
+		this.em.getTransaction().commit();
+	}
+
+	public void remover(Pedido pedido){
+		this.em.getTransaction().begin();
+		this.em.remove(pedido);
+		this.em.getTransaction().commit();
+	}
+
+	public void removerItem(PedidoItem pedidoItem){
+		this.em.getTransaction().begin();
+		this.em.remove(pedidoItem);
+		this.em.getTransaction().commit();
+	}
+
+	public Pedido buscarPedidoPoriD(long id){
+		String jpql = "SELECT p FROM Pedido p WHERE p.id = :id";
+		return em.createQuery(jpql, Pedido.class)
+				.setParameter("id", id)
+				.getSingleResult();
+	}
+
+	public List<Pedido> buscarPedidosPorPeriodo(LocalDate dataIni, LocalDate dataFim){
+		String jpql = "SELECT p FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+		return em.createQuery(jpql, Pedido.class)
+				.setParameter("dataIni", dataIni)
+				.setParameter("dataFim", dataFim)
+				.getResultList();
+	}
+
+	public List<Pedido> buscarPedidosDeUmCliente(Long id) {
+		//String jpql = "SELECT p FROM Pedido p JOIN FETCH p.cliente c WHERE c.id = :idCliente"; \\ou
+		String jpql = "SELECT p FROM Pedido p JOIN FETCH p.cliente WHERE p.cliente.id = :id";
+		return em.createQuery(jpql, Pedido.class)
+				.setParameter("id",id)
+				.getResultList();
+	}
+}
+```
+ As classes DAO interagem com o banco de dados e para interagir com as classes Dao, iremos criar as classes de serviço no pacote service. 
+ O objetivo dessas classes é abstrair a complexidade de acesso aos dadose melhorar a organização do código.
+
+### Classe CategoriaService
+```java
+package br.com.service;
+
+import br.com.dao.CategoriaDao;
+import br.com.model.Categoria;
+import jakarta.persistence.EntityManager;
+
+import java.util.List;
+
+public class CategoriaService {
+    private CategoriaDao categoriaDao;
+
+    public CategoriaService(EntityManager em){
+        categoriaDao = new CategoriaDao(em);
+    }
+
+    public void inserir(Categoria categoria){
+        categoriaDao.cadastrar(categoria);
+    }
+
+    public void alterar(Categoria categoria){
+        categoriaDao.atualizar(categoria);
+    }
+
+    public void excluir(Categoria categoria){
+        categoriaDao.remover(categoria);
+    }
+
+    public Categoria buscarCategoriaPorId(long id){
+        return categoriaDao.buscarPorId(id);
+    }
+
+    public List<Categoria> buscarTodosAsCategorias(){
+        return categoriaDao.buscarTodos();
+    }
+}
+```
+
+### Classe ProdutoService
+```java
+public class ProdutoService {
+    private ProdutoDao produtoDao;
+
+    public ProdutoService(EntityManager em){
+        produtoDao = new ProdutoDao(em);
+    }
+
+    public void inserir(Produto produto){
+        produtoDao.cadastrar(produto);
+    }
+
+    public void alterar(Produto produto){
+        produtoDao.atualizar(produto);
+    }
+
+    public void excluir(Produto produto){
+        produtoDao.remover(produto);
+    }
+
+    public Produto buscarProdutoPorId(long id){
+        return produtoDao.buscarPorId(id);
+    }
+
+    public List<Produto> buscarTodosOsProdutos(){
+        return produtoDao.buscarTodos();
+    }
+
+    public List<Produto> buscarProdutoPorNome(String nome){
+        return produtoDao.buscarPorNome(nome);
+    }
+
+    public List<Produto> buscarProdutosDaCategoria(long idCategoria){
+        return produtoDao.buscarPorCategoria(idCategoria);
+    }
+}
+```
+
+### Classe PedidoService
+```java
+public class PedidoService {
+    private PedidoDao pedidoDao;
+
+    public PedidoService(EntityManager em){
+        this.pedidoDao = new PedidoDao(em);
+    }
+
+    public void inserir(Pedido pedido){
+        pedidoDao.cadastrar(pedido);
+    }
+
+    public void alterar(Pedido pedido){
+        pedidoDao.atualizar(pedido);
+    }
+
+    public void excluir(Pedido pedido){
+        pedidoDao.remover(pedido);
+    }
+
+    public void excluirItem(PedidoItem pedidoItem){pedidoDao.removerItem(pedidoItem); }
+
+    public Pedido buscarPedidoPorId(long id){
+        return pedidoDao.buscarPedidoPoriD(id);
+    }
+
+    public List<Pedido> buscarPedidoPorPeriodo(LocalDate dataIni, LocalDate dataFim){
+        return pedidoDao.buscarPedidosPorPeriodo(dataIni, dataFim);
+    }
+
+    public List<Pedido> buscarPedidoDeUmCliente(long id){
+        return pedidoDao.buscarPedidosDeUmCliente(id);
+    }
+}
+```
+
+### Funcionalidades de Relatórios
+
+Neste projeto, existem 3 funcionalidades sobre relatórios:
+- Consultar Valor Total Vendido
+- Consultar Relatório de Vendas
+- Consultar Relatório Financeiro
+
+Para implementar estas funcionalidades, serão usadas classes do tipo VO. Elas serão usadas para agrupar os dados para os relatórios. Elas devem ser criadas em um pacote chamado vo.
+
+### Classe RelatorioDeVendasVo
+```java
+package br.com.vo;
+
+/*No contexto de JPA e JPQL, o padrão Value Object (VO) é frequentemente utilizado em
+  consultas que precisam retornar um subconjunto de dados das entidades.
+  Ao invés de retornar a própria entidade (como Pedido ou Produto),
+  um VO é utilizado para encapsular apenas os dados relevantes, evitar carregar entidades completas,
+  reduzindo a carga de dados. Além disso, são imutáveis, reduzindo o risco de alteração acidental de dados e
+  expondo apenas os dados necessários.*/
+
+import java.time.LocalDate;
+
+public class RelatorioDeVendasVo {
+	
+	private String nomeProduto;
+	private Long quantidadeVendida;
+	private LocalDate dataUltimaVenda;
+	
+	public RelatorioDeVendasVo(String nomeProduto, Long quantidadeVendida, LocalDate dataUltimaVenda) {
+		this.nomeProduto = nomeProduto;
+		this.quantidadeVendida = quantidadeVendida;
+		this.dataUltimaVenda = dataUltimaVenda;
+	}
+	
+	@Override
+	public String toString() {
+		return "RelatorioDeVendasVo [nomeProduto=" + nomeProduto + ", quantidadeVendida=" + quantidadeVendida
+				+ ", dataUltimaVenda=" + dataUltimaVenda + "]";
+	}
+}
+```
+
+### Classe RelatorioFinanceiroVo
+```java
+import java.math.BigDecimal;
+
+public class RelatorioFinanceiroVo {
+    String nomeCliente;
+    BigDecimal totalPedidosDoCliente;
+
+    public RelatorioFinanceiroVo(String nomeCliente, BigDecimal totalPedidosDoCliente) {
+        this.nomeCliente = nomeCliente;
+        this.totalPedidosDoCliente = totalPedidosDoCliente;
+    }
+
+    @Override
+    public String toString() {
+        return "RelatorioFinanceiroVo [nomeCliente=" + nomeCliente +
+                ", TotalPedidosCliente=" + totalPedidosDoCliente + "]";
+    }
+}
+```
+
+Alémm das classes vo, para implementar os relatóios se fazem necessárias outras classes, tais como a seguir:
+
+### Classe VendaDao
+```java
+public class VendaDAO {
+
+    private EntityManager em;
+
+    public VendaDAO(EntityManager em) {
+        this.em = em;
+    }
+
+    public BigDecimal retornaValorTotalVendidoEmUmPeriodo(LocalDate dataIni, LocalDate dataFim) {
+        String jpql = "SELECT SUM(p.valorTotal) FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+        BigDecimal total = em.createQuery(jpql, BigDecimal.class)
+                .setParameter("dataIni", dataIni)
+                .setParameter("dataFim", dataFim)
+                .getSingleResult();
+        if (total == null) {
+            return BigDecimal.ZERO;
+        }
+        return total;
+    }
+
+    /* SELECT NEW em JPQL é indicado em situações onde se quer apenas uma parte dos dados das entidades e
+       se quer encapsulá-los num objeto específico, como um VO (Value Object), por exemplo. É muito utilizado
+       para gerar relatórios ou resumos que utilizam funções de agregação tais: como sum, max, min, count.
+       Resumindo: utiliza-se o select new quando o resultado da consulta não é uma entidade mapeada,
+       desta forma, é necessário indicar a classe que será retornada. */
+    public List<RelatorioDeVendasVo> relatorioDeVendas() {
+        String jpql = "SELECT new br.com.vo.RelatorioDeVendasVo("
+                + "produto.nome, "
+                + "SUM(item.quantidade), "
+                + "MAX(pedido.data)) "
+                + "FROM Pedido pedido "
+                + "JOIN pedido.itens item "
+                + "JOIN item.produto produto "
+                + "GROUP BY produto.nome "
+                + "ORDER BY SUM(item.quantidade) DESC";
+        return em.createQuery(jpql, RelatorioDeVendasVo.class)
+                .getResultList();
+    }
+
+    public List<RelatorioFinanceiroVo> relatorioFinanceiro() {
+        String jpql = "SELECT new br.com.vo.RelatorioFinanceiroVo("
+                + "cliente.nome, "
+                + "SUM(pedido.valorTotal)) "
+                + "FROM Pedido pedido "
+                + "JOIN pedido.cliente cliente "
+                + "GROUP BY cliente.nome "
+                + "ORDER BY SUM(pedido.valorTotal) DESC";
+        return em.createQuery(jpql, RelatorioFinanceiroVo.class)
+                .getResultList();
+    }
+}
+```
+
+### Classe VendaService
+```java
+public class VendaService {
+    private VendaDAO vendasDAO;
+
+    public VendaService(EntityManager em){
+        this.vendasDAO = new VendaDAO(em);
+    }
+
+    public BigDecimal retornaValorTotalVendido(LocalDate dataIni, LocalDate dataFim){
+        return this.vendasDAO.retornaValorTotalVendidoEmUmPeriodo(dataIni, dataFim);
+    }
+
+    public List<RelatorioDeVendasVo> retornaRelatorioDeVendas(){
+        return this.vendasDAO.relatorioDeVendas();
+    }
+
+    public List<RelatorioFinanceiroVo> retornaRelatorioFinanceiro(){
+        return this.vendasDAO.relatorioFinanceiro();
+    }
+}
+```
+## Leitura sugerida
+Sobre consultas avançadas com JPQL, é sugerido a leitura sobre:
+- [NamedQuery](https://blog.triadworks.com.br/como-organizar-consultas-jpql-named-queries-ou-queries-dinamicas#:~:text=Uma%20Named%20Query%20nada%20mais,entidades%20atrav%C3%A9s%20da%20anota%C3%A7%C3%A3o%20%40NamedQuery)
+- [Criteria](https://vanderloureiro.medium.com/filtros-avan%C3%A7ados-com-jpa-criteria-58fbe92f5171#:~:text=O%20que%20%C3%A9%20o%20JPA,de%20buscas%20atrav%C3%A9s%20de%20concatena%C3%A7%C3%A3o)
 
 
 
+## Classe Main
+Para testar as funcionalidades implementadas, iremos fazer as chamadas na classe Main:
+```java
+public class Main {
+
+    private static final Scanner scanner = new Scanner(System.in);
+    private static EntityManager em;
+
+    public static void main(String[] args) {
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("PostgresPU");
+        em = emf.createEntityManager();
+
+        CategoriaService categoriaService = new CategoriaService(em);
+        ProdutoService produtoService = new ProdutoService(em);
+        PedidoService pedidoService = new PedidoService(em);
+        VendaService vendaService =  new VendaService(em);
+
+        boolean continuar = true;
+
+        while (continuar) {
+            System.out.println("----- MENU -----");
+            System.out.println("1. Cadastrar Categoria");
+            System.out.println("2. Alterar Categoria");
+            System.out.println("3. Excluir Categoria");
+            System.out.println("4. Consultar Categoria por ID");
+            System.out.println("5. Listar todas as Categorias");
+            System.out.println("6. Cadastrar Produto");
+            System.out.println("7. Alterar Produto");
+            System.out.println("8. Excluir Produto");
+            System.out.println("9. Consultar Produto por ID");
+            System.out.println("10. Consultar Produtos por Nome");
+            System.out.println("11. Consultar Produtos por Categoria");
+            System.out.println("12. Cadastrar Pedido");
+            System.out.println("13. Consultar Pedido por ID");
+            System.out.println("14. Consultar Pedidos por Período");
+            System.out.println("15. Consultar Pedidos de um Cliente");
+            System.out.println("16. Alterar a quantidade de um item do pedido");
+            System.out.println("17. Excluir um item do pedido");
+            System.out.println("18. Consultar Valor Total vendido");
+            System.out.println("19. Consultar Relatório de Vendas");
+            System.out.println("20. Consultar Relatório Financeiro");
+            System.out.println("0. Sair");
+            System.out.print("Escolha uma opção: ");
+
+            int opcao = scanner.nextInt();
+            scanner.nextLine(); // Limpar o buffer
+
+            switch (opcao) {
+                case 1 -> cadastrarCategoria(categoriaService);
+                case 2 -> alterarCategoria(categoriaService);
+                case 3 -> excluirCategoria(categoriaService);
+                case 4 -> consultarCategoriaPorId(categoriaService);
+                case 5 -> listarCategorias(categoriaService);
+                case 6 -> cadastrarProduto(produtoService, categoriaService);
+                case 7 -> alterarProduto(produtoService);
+                case 8 -> excluirProduto(produtoService);
+                case 9 -> consultarProdutoPorId(produtoService);
+                case 10 -> consultarProdutosPorNome(produtoService);
+                case 11 -> consultarProdutosPorCategoria(produtoService, categoriaService);
+                case 12 -> cadastrarPedido(pedidoService, produtoService);
+                case 13 -> consultarPedidoPorId(pedidoService);
+                case 14 -> consultarPedidosPorPeriodo(pedidoService);
+                case 15 -> consultarPedidosDeCliente(pedidoService);
+                case 16 -> alterarQuantidadeItemPedido(pedidoService);
+                case 17 -> excluirItemPedido(pedidoService);
+                case 18 -> consultarValorTotalVendido(vendaService);
+                case 19 -> consultarRelatorioVendas(vendaService);
+                case 20 -> consultarRelatorioFinanceiro(vendaService);
+                case 0 -> continuar = false;
+                default -> System.out.println("Opção inválida!");
+            }
+        }
+
+        em.close();
+        emf.close();
+        System.out.println("Programa encerrado.");
+
+    }
+
+    private static void cadastrarCategoria(CategoriaService categoriaService) {
+        System.out.print("Digite o nome da categoria: ");
+        String nome = scanner.nextLine();
+        Categoria categoria = new Categoria(nome);
+        categoriaService.inserir(categoria);
+        System.out.println("Categoria cadastrada com sucesso!");
+    }
+
+    private static void alterarCategoria(CategoriaService categoriaService) {
+        System.out.print("Digite o ID da categoria a ser alterada: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Categoria categoria = categoriaService.buscarCategoriaPorId(id);
+        if (categoria != null) {
+            System.out.print("Digite o novo nome da categoria: ");
+            categoria.setNome(scanner.nextLine());
+            categoriaService.alterar(categoria);
+            System.out.println("Categoria alterada com sucesso!");
+        } else {
+            System.out.println("Categoria não encontrada.");
+        }
+    }
+
+    private static void excluirCategoria(CategoriaService categoriaService) {
+        System.out.print("Digite o ID da categoria a ser excluída: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Categoria categoria = categoriaService.buscarCategoriaPorId(id);
+        if (categoria != null) {
+            categoriaService.excluir(categoria);
+            System.out.println("Categoria excluída com sucesso!");
+        } else {
+            System.out.println("Categoria não encontrada.");
+        }
+    }
+
+    private static void consultarCategoriaPorId(CategoriaService categoriaService) {
+        System.out.print("Digite o ID da categoria: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Categoria categoria = categoriaService.buscarCategoriaPorId(id);
+        System.out.println(categoria != null ? categoria.toString() : "Categoria não encontrada.");
+    }
+
+    private static void listarCategorias(CategoriaService categoriaService) {
+        List<Categoria> categorias = categoriaService.buscarTodosAsCategorias();
+        categorias.forEach(System.out::println);
+    }
+
+    private static void cadastrarProduto(ProdutoService produtoService, CategoriaService categoriaService) {
+        System.out.print("Digite o nome do produto: ");
+        String nome = scanner.nextLine();
+        System.out.print("Digite a descrição do produto: ");
+        String descricao = scanner.nextLine();
+        System.out.print("Digite o preço do produto: ");
+        BigDecimal preco = scanner.nextBigDecimal();
+        scanner.nextLine();
+        System.out.print("Digite o ID da categoria: ");
+        Long categoriaId = scanner.nextLong();
+        scanner.nextLine();
+        Categoria categoria = categoriaService.buscarCategoriaPorId(categoriaId);
+
+        if (categoria != null) {
+            Produto produto = new Produto(nome, descricao, preco, categoria);
+            produtoService.inserir(produto);
+            System.out.println("Produto cadastrado com sucesso!");
+        } else {
+            System.out.println("Categoria não encontrada.");
+        }
+    }
+
+    private static void alterarProduto(ProdutoService produtoService) {
+        System.out.print("Digite o ID do produto a ser alterado: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Produto produto = produtoService.buscarProdutoPorId(id);
+        if (produto != null) {
+            System.out.print("Digite o novo nome do produto: ");
+            produto.setNome(scanner.nextLine());
+            System.out.print("Digite a nova descrição do produto: ");
+            produto.setDescricao(scanner.nextLine());
+            System.out.print("Digite o novo preço do produto: ");
+            produto.setPreco(scanner.nextBigDecimal());
+            scanner.nextLine(); // consumir nova linha
+            produtoService.alterar(produto);
+            System.out.println("Produto alterado com sucesso!");
+        } else {
+            System.out.println("Produto não encontrado.");
+        }
+    }
+
+    private static void excluirProduto(ProdutoService produtoService) {
+        System.out.print("Digite o ID do produto a ser alterado: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Produto produto = produtoService.buscarProdutoPorId(id);
+        if (produto != null) {
+            produtoService.excluir(produto);
+            System.out.println("Produto excluído com sucesso!");
+        } else {
+            System.out.println("Produto não encontrado.");
+        }
+    }
+
+    private static void consultarProdutoPorId(ProdutoService produtoService) {
+        System.out.print("Digite o ID do produto: ");
+        Long id = scanner.nextLong();
+        scanner.nextLine();
+        Produto produto = produtoService.buscarProdutoPorId(id);
+        if (produto != null) {
+            System.out.println("Produto encontrado: " + produto);
+        } else {
+            System.out.println("Produto não encontrado.");
+        }
+    }
+
+    private static void consultarProdutosPorNome(ProdutoService produtoService) {
+        System.out.print("Digite o nome do produto: ");
+        String nome = scanner.nextLine();
+        List<Produto> produtos = produtoService.buscarProdutoPorNome(nome);
+        if (!produtos.isEmpty()) {
+            System.out.println("Produtos encontrados:");
+            produtos.forEach(System.out::println);
+        } else {
+            System.out.println("Nenhum produto encontrado com esse nome.");
+        }
+    }
+
+    private static void consultarProdutosPorCategoria(ProdutoService produtoService, CategoriaService categoriaService) {
+        System.out.print("Digite o ID da categoria: ");
+        Long categoriaId = scanner.nextLong();
+        scanner.nextLine(); // consumir nova linha
+        List<Produto> produtos = produtoService.buscarProdutosDaCategoria(categoriaId);
+        if (!produtos.isEmpty()) {
+            System.out.println("Produtos da categoria:");
+            produtos.forEach(System.out::println);
+        } else {
+            System.out.println("Nenhum produto encontrado nessa categoria.");
+        }
+    }
+
+    private static void cadastrarPedido(PedidoService pedidoService, ProdutoService produtoService) {
+        System.out.print("Digite o ID do cliente: ");
+        Long clienteId = scanner.nextLong();
+        scanner.nextLine(); // consumir nova linha
+
+        Cliente cliente = em.find(Cliente.class, clienteId);
+        if (cliente != null) {
+            Pedido pedido = new Pedido(cliente);
+
+            boolean adicionarProduto;
+            do {
+                System.out.print("Digite o ID do produto: ");
+                Long produtoId = scanner.nextLong();
+                scanner.nextLine(); // consumir nova linha
+
+                Produto produto = produtoService.buscarProdutoPorId(produtoId);
+                if (produto != null) {
+                    System.out.print("Digite a quantidade do produto: ");
+                    int quantidade = scanner.nextInt();
+                    scanner.nextLine(); // consumir nova linha
+
+                    PedidoItem pedidoItem = new PedidoItem(quantidade, pedido, produto);
+
+                    pedido.adicionarItem(pedidoItem);
+                } else {
+                    System.out.println("Produto não encontrado.");
+                }
+
+                System.out.print("Deseja adicionar outro produto? (s/n): ");
+                adicionarProduto = scanner.nextLine().equalsIgnoreCase("s");
+            } while (adicionarProduto);
+
+            pedidoService.inserir(pedido);
+            System.out.println("Pedido cadastrado com sucesso!");
+        }else{
+            System.out.println("Cliente não encontrado.");
+        }
+    }
+
+    private static void consultarPedidoPorId(PedidoService pedidoService) {
+        System.out.print("Digite o ID do pedido: ");
+        Long pedidoId = scanner.nextLong();
+        scanner.nextLine(); // consumir nova linha
+
+        Pedido pedido = pedidoService.buscarPedidoPorId(pedidoId);
+        if (pedido != null) {
+            System.out.println("Pedido encontrado: " + pedido);
+        } else {
+            System.out.println("Pedido não encontrado.");
+        }
+    }
+
+    private static void consultarPedidosPorPeriodo(PedidoService pedidoService) {
+        System.out.print("Digite a data de início (yyyy-MM-dd): ");
+        LocalDate dataInicio = LocalDate.parse(scanner.nextLine(), DateTimeFormatter.ISO_LOCAL_DATE);
+        System.out.print("Digite a data de fim (yyyy-MM-dd): ");
+        LocalDate dataFim = LocalDate.parse(scanner.nextLine(), DateTimeFormatter.ISO_LOCAL_DATE);
+
+        List<Pedido> pedidos = pedidoService.buscarPedidoPorPeriodo(dataInicio, dataFim);
+        if (!pedidos.isEmpty()) {
+            System.out.println("Pedidos no período selecionado:");
+            pedidos.forEach(System.out::println);
+        } else {
+            System.out.println("Nenhum pedido encontrado no período informado.");
+        }
+    }
+
+    private static void consultarPedidosDeCliente(PedidoService pedidoService) {
+        System.out.print("Digite o ID do cliente: ");
+        Long clienteId = scanner.nextLong();
+        scanner.nextLine(); // consumir nova linha
+
+        List<Pedido> pedidos = pedidoService.buscarPedidoDeUmCliente(clienteId);
+        if (!pedidos.isEmpty()) {
+            System.out.println("Pedidos do cliente selecionado:");
+            pedidos.forEach(System.out::println);
+        } else {
+            System.out.println("Nenhum pedido encontrado para esse cliente.");
+        }
+    }
+
+    private static void alterarQuantidadeItemPedido(PedidoService pedidoService){
+        System.out.print("Digite o ID do pedido: ");
+        Long pedidoId = scanner.nextLong();
+        scanner.nextLine();
+
+        Pedido pedido = pedidoService.buscarPedidoPorId(pedidoId);
+        if (pedido != null) {
+            System.out.print("Digite o ID do item do pedido que deseja alterar a quantidade: ");
+            Long itemPedidoId = scanner.nextLong();
+            scanner.nextLine();
+
+            List<PedidoItem> itensPedido = pedido.getItens();
+            boolean encontrou = false;
+            for(PedidoItem item: itensPedido){
+                if(item.getId().equals(itemPedidoId)){
+                    System.out.print("Digite a nova quantidade: ");
+                    int quantidade = scanner.nextInt();
+                    scanner.nextLine();
+
+                    pedido.removerItem(item);
+                    item.setQuantidade(quantidade);
+                    pedido.adicionarItem(item);
+                    pedidoService.alterar(pedido);
+                    System.out.println("Quantidade alterada com sucesso! ");
+                    encontrou = true;
+                    break;
+                }
+            }
+            if(!encontrou){
+                System.out.println("Item do pedido não encontrado.");
+            }
+
+        } else {
+            System.out.println("Pedido não encontrado.");
+        }
+    }
+
+    private static void excluirItemPedido(PedidoService pedidoService){
+        System.out.print("Digite o ID do pedido: ");
+        Long pedidoId = scanner.nextLong();
+        scanner.nextLine();
+
+        Pedido pedido = pedidoService.buscarPedidoPorId(pedidoId);
+        if (pedido != null) {
+            System.out.print("Digite o ID do item do pedido que deseja excluir: ");
+            Long itemPedidoId = scanner.nextLong();
+            scanner.nextLine();
+
+            List<PedidoItem> itensPedido = pedido.getItens();
+            boolean encontrou = false;
+            for(PedidoItem item: itensPedido){
+                if(item.getId().equals(itemPedidoId)){
+                    pedido.removerItem(item);
+                    pedidoService.alterar(pedido);
+                    pedidoService.excluirItem(item);
+                    System.out.println("Item excluido com sucesso! ");
+                    encontrou = true;
+                    break;
+                }
+            }
+            if(!encontrou){
+                System.out.println("Item do pedido não encontrado.");
+            }
+
+        } else {
+            System.out.println("Pedido não encontrado.");
+        }
+    }
+
+    private static void consultarValorTotalVendido(VendaService vendaService){
+        System.out.print("Digite a data de início (yyyy-MM-dd) do período de consulta: ");
+        LocalDate dataInicio = LocalDate.parse(scanner.nextLine(), DateTimeFormatter.ISO_LOCAL_DATE);
+        System.out.print("Digite a data de fim (yyyy-MM-dd)  do período de consulta: ");
+        LocalDate dataFim = LocalDate.parse(scanner.nextLine(), DateTimeFormatter.ISO_LOCAL_DATE);
+
+        BigDecimal valorTotal = vendaService.retornaValorTotalVendido(dataInicio, dataFim);
+        System.out.println("Valor total vendido no período: " + valorTotal);
+    }
+
+    private static void  consultarRelatorioVendas(VendaService vendaService){
+        List<RelatorioDeVendasVo> relatorioVendas = vendaService.retornaRelatorioDeVendas();
+        System.out.println("Relatório de Vendas:");
+        relatorioVendas.forEach(System.out::println);
+    }
+
+    private static void  consultarRelatorioFinanceiro(VendaService vendaService){
+        List<RelatorioFinanceiroVo> relatorioFinanceiro = vendaService.retornaRelatorioFinanceiro();
+        System.out.println("Relatório Financeiro:");
+        relatorioFinanceiro.forEach(System.out::println);
+    }
+}
+```
+
+
+# Teste Unitário com JUnit
+O framework JUnit5 utiliza anotações para a identificação de métodos de teste. Por se tratar de testes unitários, eles não devem depender de outros testes para o seu funcionamento. Além das anotações, são usados métodos de asserções para validar as informações e verificar se o teste falhou ou se está ok. A seguir, as principais anotações do JUnit5:
+    • @Test: é usado para anotar os métodos para serem executados como um teste;
+    • @BeforeEach: método anotado com essa anotação será executado uma vez antes de cada método de teste anotado com @Test;
+    • @AfterEach: método anotado com essa anotação será executado uma vez após cada método de teste anotado com @Test;
+    • @BeforeAll: é executado antes de todos os testes;
+    • @AfterAll: é executado após todos os testes;
+
+Os Asserts mais comuns são:
+    • assertEquals (expected, actual): Afirma que os valores esperados e reais são iguais.
+    • assertNotEquals(expected, actual): Afirma que os valores esperados e os valores reais não são iguais.
+    • assertTrue(condition): Isto afirma se a condição dada é verdadeira. O caso de teste passa se for verdadeira e falha se não for.
+    • assertFalse(condition): Isto afirma se a condição dada é falsa. O caso de teste passa se for falsa e falha se não for.
+    • assertNull(value): Isso afirma se o valor fornecido é nulo. O caso de teste passa se for nulo e falha se não for.
+    • assertNotNull(value): Isso afirma se o valor fornecido não é nulo. O caso de teste passa se não for nulo e falha se não for.
+
+## Classes de Teste do Projeto
+
+### Classe CategoriaServiceTest
+```java
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class CategoriaServiceTest {
+    private EntityManager em;
+    private CategoriaService categoriaService;
+
+    @BeforeEach
+    public void setup() {
+        // Configura a conexão com o banco de dados PostgreSQL
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("PostgresPU"); // Verifique seu persistence.xml
+        em = emf.createEntityManager();
+        categoriaService = new CategoriaService(em);
+    }
+
+    @AfterEach
+    public void limparBanco() {
+        em.getTransaction().begin();
+        em.createQuery("delete from Categoria c").executeUpdate();
+        em.getTransaction().commit();
+    }
+
+    @Test
+    public void cadastrarCategoria() {
+        Categoria celulares = new Categoria("CELULARES");
+
+        categoriaService.inserir(celulares);
+        Categoria categ = em.find(Categoria.class, celulares.getId());
+        assertNotNull(categ);
+    }
+
+    @Test
+    public void alterarCategoria(){
+        Categoria celulares = new Categoria("CELULARES");
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.getTransaction().commit();
+
+        celulares.setNome("smartphones");
+        categoriaService.alterar(celulares);
+        Categoria prod = em.find(Categoria.class, celulares.getId());
+        assertEquals("smartphones", prod.getNome());
+    }
+
+    @Test
+    public void excluirCategoria(){
+        Categoria celulares = new Categoria("CELULARES");
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.getTransaction().commit();
+
+        categoriaService.excluir(celulares);
+        Categoria prod = em.find(Categoria.class, celulares.getId());
+        assertNull(prod);
+    }
+
+    @Test
+    public void consultarCategoriaPorId() {
+        Categoria celulares = new Categoria("CELULARES");
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.getTransaction().commit();
+
+        Categoria categoria = categoriaService.buscarCategoriaPorId(celulares.getId());
+        assertNotNull(celulares);
+        assertEquals("CELULARES", categoria.getNome());
+    }
+
+    @Test
+    public void buscarTodasAsCategorias() {
+        Categoria celulares = new Categoria("CELULARES");
+        Categoria teclados = new Categoria("TECLADOS");
+        Categoria mouses = new Categoria("MOUSES");
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(teclados);
+        em.persist(mouses);
+        em.getTransaction().commit();
+
+
+        List<Categoria> categoria = categoriaService.buscarTodosAsCategorias();
+        assertFalse(categoria.isEmpty());
+        assertEquals(3, categoria.size());
+    }
+}
+```
+Você pode executar toda a classe de teste numa só vez clicando em Run Test (Ctrl+Shift+F10).
+Ou clicar como indicado na Figura:
+![image](https://github.com/user-attachments/assets/27e37238-57fe-42ef-a319-0e078ab0bc19)
+
+Ou, executar cada método de teste separadamente, a medida em que eles forem sendo implementados.
+
+![image](https://github.com/user-attachments/assets/25ef9b8f-96f2-4e96-979a-386ca49bb029)
+
+Ao executar o(s) teste(s) de uma classe, a IDE irá mostrar se os casos passaram ou não. Abaixo um exemplo onde todos os casos de teste passaram.
+
+![image](https://github.com/user-attachments/assets/0137b11d-d9ff-42ad-a901-9c7f644a851e)
+
+
+
+### Classe ProdutoServiceTest
+```java
+public class ProdutoServiceTest {
+    private EntityManager em;
+    private ProdutoService produtoService;
+
+    @BeforeEach
+    public void setup() {
+        // Configura a conexão com o banco de dados PostgreSQL
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("PostgresPU"); // Verifique seu persistence.xml
+        em = emf.createEntityManager();
+
+        produtoService = new ProdutoService(em);
+    }
+
+    @AfterEach
+    public void limparBanco() {
+        em.getTransaction().begin();
+
+        em.createQuery("delete from Produto p").executeUpdate();
+        em.createQuery("delete from Categoria c").executeUpdate();
+
+        em.getTransaction().commit();
+    }
+
+    @Test
+    public void cadastrarProduto() {
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.getTransaction().commit();
+
+
+        produtoService.inserir(celular);
+        Produto prod = em.find(Produto.class, celular.getId());
+        assertNotNull(prod);
+    }
+
+    @Test
+    public void alterarProduto(){
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(celular);
+        em.getTransaction().commit();
+
+        celular.setNome("Xiaomi Mi 9 SE");
+        produtoService.alterar(celular);
+        Produto prod = em.find(Produto.class, celular.getId());
+        assertEquals("Xiaomi Mi 9 SE", prod.getNome());
+    }
+
+    @Test
+    public void excluirProduto(){
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(celular);
+        em.getTransaction().commit();
+
+        produtoService.excluir(celular);
+        Produto prod = em.find(Produto.class, celular.getId());
+        assertNull(prod);
+    }
+
+    @Test
+    public void consultarProdutoPorId() {
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(celular);
+        em.getTransaction().commit();
+
+        Produto produtoCadastrado = produtoService.buscarProdutoPorId(celular.getId());
+        assertNotNull(produtoCadastrado);
+    }
+
+    @Test
+    public void buscarProdutosPorNome() {
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(celular);
+        em.getTransaction().commit();
+
+        List<Produto> produtos = produtoService.buscarProdutoPorNome("Xiaomi Redmi");
+        assertFalse(produtos.isEmpty());
+    }
+
+    @Test
+    public void buscarProdutosPorCategoria() {
+        Categoria celulares = new Categoria("CELULARES");
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+
+        em.getTransaction().begin();
+        em.persist(celulares);
+        em.persist(celular);
+        em.getTransaction().commit();
+
+        List<Produto> produtos = produtoService.buscarProdutosDaCategoria(celulares.getId());
+        assertFalse(produtos.isEmpty());
+    }
+}
+```
+### Classe PedidoServiceTest
+```java
+public class PedidoServiceTest {
+    private EntityManager em;
+    private PedidoService pedidoService;
+    private ProdutoDao produtoDao;
+    private ClienteDao clienteDao;
+
+    @BeforeEach
+    public void setup() {
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("PostgresPU");
+        em = emf.createEntityManager();
+
+        pedidoService = new PedidoService(em);
+
+        popularBancoDeDados();
+    }
+
+    @AfterEach
+    public void limparBanco() {
+        em.getTransaction().begin();
+
+        em.createQuery("delete from PedidoItem ip").executeUpdate();
+        em.createQuery("delete from Pedido pd").executeUpdate();
+        em.createQuery("delete from Produto p").executeUpdate();
+        em.createQuery("delete from Categoria c").executeUpdate();
+        //em.createQuery("delete from Cliente c").executeUpdate();
+
+        em.getTransaction().commit();
+    }
+
+    @Test
+    public void cadastrarPedidos() {
+        List<Produto> produtos = em.createQuery("SELECT p FROM Produto p", Produto.class).getResultList();
+        Produto produto1 = produtos.get(0);
+        Produto produto2 = produtos.get(1);
+
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        Pedido pedido = new Pedido(cliente);
+        pedido.adicionarItem(new PedidoItem(10, pedido, produto1));
+        pedido.adicionarItem(new PedidoItem(40, pedido, produto2));
+
+        pedidoService.inserir(pedido);
+
+        assertNotNull(em.find(Pedido.class, pedido.getId()));
+    }
+
+    @Test
+    public void cadastrarProdutoComPrecoZero() {
+        Categoria categoria = new Categoria("BRINDES");
+        Produto produtoGratuito = new Produto("Caneta", "Caneta promocional", BigDecimal.ZERO, categoria);
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        em.getTransaction().begin();
+        em.persist(categoria);
+        em.persist(produtoGratuito);
+        em.getTransaction().commit();
+
+        Pedido pedido = new Pedido(cliente);
+        pedido.adicionarItem(new PedidoItem(5, pedido, produtoGratuito));
+        pedidoService.inserir(pedido);
+
+        assertEquals(BigDecimal.ZERO, pedido.getValorTotal());
+    }
+
+    @Test
+    public void alterarQuantidadeDeItemPedido() {
+        Produto produto = em.createQuery("SELECT p FROM Produto p", Produto.class).setMaxResults(1).getSingleResult();
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        Pedido pedido = new Pedido(cliente);
+        PedidoItem item = new PedidoItem(5, pedido, produto);
+        pedido.adicionarItem(item);
+        pedidoService.inserir(pedido);
+
+        pedido.removerItem(item);
+        item.setQuantidade(10);
+        pedido.adicionarItem(item);
+        pedidoService.alterar(pedido);
+
+        Pedido pedidoAtualizado = em.find(Pedido.class, pedido.getId());
+        PedidoItem itemAtualizado = pedidoAtualizado.getItens().stream()
+                .filter(i -> i.getId().equals(item.getId()))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(itemAtualizado);
+        assertEquals(10, itemAtualizado.getQuantidade());
+    }
+
+    @Test
+    public void excluirItemPedidoERetornarValorTotalDoPedidoAtualizado() {
+        List<Produto> produtos = em.createQuery("SELECT p FROM Produto p", Produto.class).getResultList();
+        Produto produto1 = produtos.get(0);
+        Produto produto2 = produtos.get(1);
+
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        Pedido pedido = new Pedido(cliente);
+        PedidoItem item1 = new PedidoItem(5, pedido, produto1);
+        PedidoItem item2 = new PedidoItem(1, pedido, produto2);
+        pedido.adicionarItem(item1);
+        pedido.adicionarItem(item2);
+        pedidoService.inserir(pedido);
+
+        pedido.removerItem(item2);
+        pedidoService.alterar(pedido);
+
+        Pedido pedidoAtualizado = em.find(Pedido.class, pedido.getId());
+        PedidoItem itemRemovido = pedidoAtualizado.getItens().stream()
+                .filter(i -> i.getProduto().equals(item2))
+                .findFirst()
+                .orElse(null);
+
+        assertNull(itemRemovido);
+        assertEquals(new BigDecimal("4000"), pedidoAtualizado.getValorTotal());
+    }
+
+    @Test
+    public void excluirPedido() {
+        Produto produto1 = em.createQuery("SELECT p FROM Produto p", Produto.class).setMaxResults(1).getSingleResult();
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        Pedido pedido = new Pedido(cliente);
+        pedido.adicionarItem(new PedidoItem(10, pedido, produto1));
+        pedidoService.inserir(pedido);
+
+        pedidoService.excluir(pedido);
+
+        Pedido pedidoExcluido = em.find(Pedido.class, pedido.getId());
+        assertNull(pedidoExcluido);
+    }
+
+    @Test
+    public void consultarPedidoPorId() {
+        Produto produto1 = em.createQuery("SELECT p FROM Produto p", Produto.class).setMaxResults(1).getSingleResult();
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        em.getTransaction().begin();
+
+        Pedido pedido = new Pedido(cliente);
+        pedido.adicionarItem(new PedidoItem(10, pedido, produto1));
+        em.persist(pedido);
+
+        em.getTransaction().commit();
+
+        Pedido pedidoCadastrado = pedidoService.buscarPedidoPorId(pedido.getId());
+        assertNotNull(pedidoCadastrado);
+    }
+
+
+    @Test
+    public void consultarPedidosFiltradosPorPeriodo() {
+        Produto produto = em.createQuery("SELECT p FROM Produto p", Produto.class).setMaxResults(1).getSingleResult();
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+
+        Pedido pedidoOntem = new Pedido(cliente);
+        pedidoOntem.adicionarItem(new PedidoItem(1, pedidoOntem, produto));
+        LocalDate ontem = LocalDate.now().minusDays(1);
+        pedidoOntem.setData(ontem);
+        pedidoService.inserir(pedidoOntem);
+
+        Pedido pedidoHoje = new Pedido(cliente);
+        pedidoHoje.adicionarItem(new PedidoItem(1, pedidoHoje, produto));
+        pedidoHoje.setData(LocalDate.now());
+        pedidoService.inserir(pedidoHoje);
+
+        Pedido pedidoAmanha = new Pedido(cliente);
+        pedidoAmanha.adicionarItem(new PedidoItem(1, pedidoAmanha, produto));
+        LocalDate amanha = LocalDate.now().plusDays(1);
+        pedidoAmanha.setData(amanha);
+        pedidoService.inserir(pedidoAmanha);
+
+
+        List<Pedido> pedidosPeriodo = pedidoService.buscarPedidoPorPeriodo(ontem, amanha);
+        assertEquals(3, pedidosPeriodo.size());
+        assertEquals(pedidoOntem, pedidosPeriodo.getFirst());
+    }
+
+    @Test
+    public void consultarPedidosDeUmCliente() {
+        List<Produto> produtos = em.createQuery("SELECT p FROM Produto p", Produto.class).getResultList();
+        Produto produto1 = produtos.get(0);
+        Produto produto2 = produtos.get(1);
+
+        Cliente cliente = em.createQuery("SELECT c FROM Cliente c", Cliente.class).setMaxResults(1).getSingleResult();
+
+        Pedido pedido1 = new Pedido(cliente);
+        PedidoItem item1 = new PedidoItem(5, pedido1, produto1);
+        PedidoItem item2 = new PedidoItem(1, pedido1, produto2);
+        pedido1.adicionarItem(item1);
+        pedido1.adicionarItem(item2);
+        pedidoService.inserir(pedido1);
+
+        Pedido pedido2 = new Pedido(cliente);
+        PedidoItem item3 = new PedidoItem(2, pedido2, produto2);
+        pedido2.adicionarItem(item3);
+        pedidoService.inserir(pedido2);
+
+        List<Pedido> pedidosCliente = pedidoService.buscarPedidoDeUmCliente(cliente.getId());
+        assertEquals(2, pedidosCliente.size());
+    }
+
+    private void popularBancoDeDados() {
+        Categoria celulares = new Categoria("CELULARES");
+        Categoria videogames = new Categoria("VIDEOGAMES");
+        Categoria informatica = new Categoria("INFORMATICA");
+        Categoria utilitarios = new Categoria("UTILITARIOS");
+
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+        Produto videogame = new Produto("PS5", "Playstation 5", new BigDecimal("8000"), videogames);
+        Produto macbook = new Produto("Macbook", "Macbook pro", new BigDecimal("14000"), informatica);
+        Produto mouse = new Produto("Mouse", "Mouse de computador", new BigDecimal("45"), utilitarios);
+        Produto teclado = new Produto("Teclado", "Teclado de computador", new BigDecimal("130"), utilitarios);
+
+        Cliente cliente = new Cliente("Fran", "123456");
+        Cliente cliente2 = new Cliente("Celso", "987654");
+
+        em.getTransaction().begin();
+
+        em.persist(celulares);
+        em.persist(videogames);
+        em.persist(informatica);
+        em.persist(utilitarios);
+        em.persist(celular);
+        em.persist(videogame);
+        em.persist(macbook);
+        em.persist(mouse);
+        em.persist(teclado);
+        em.persist(cliente);
+        em.persist(cliente2);
+
+        em.getTransaction().commit();
+    }
+}
+```
+
+### Classe VendaServiceTest
+```java
+public class VendaServiceTest {
+    private EntityManager em;
+    private VendaDAO vendaDAO;
+
+    @BeforeEach
+    public void setup() {
+        // Configura a conexão com o banco de dados PostgreSQL
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("PostgresPU"); // Verifique seu persistence.xml
+        em = emf.createEntityManager();
+
+        vendaDAO = new VendaDAO(em);
+
+        // Popula o banco de dados com os dados necessários para os testes
+        popularBancoDeDados();
+    }
+
+    @AfterEach
+    public void limparBanco() {
+        em.getTransaction().begin();
+
+        em.createQuery("delete from PedidoItem ip").executeUpdate();
+        em.createQuery("delete from Pedido pd").executeUpdate();
+        em.createQuery("delete from Produto p").executeUpdate();
+        em.createQuery("delete from Categoria c").executeUpdate();
+
+        em.getTransaction().commit();
+    }
+
+    @Test
+    public void retornarValorTotalVendido() {
+        BigDecimal totalVendido = vendaDAO.retornaValorTotalVendidoEmUmPeriodo(LocalDate.now(), LocalDate.now());
+        assertEquals(new BigDecimal("356000.00"), totalVendido);
+    }
+
+    @Test
+    public void retornarRelatorioDeVendas() {
+
+        List<RelatorioDeVendasVo> relatorio = vendaDAO.relatorioDeVendas();
+        assertNotNull(relatorio);
+        assertFalse(relatorio.isEmpty());
+    }
+
+    @Test
+    public void retornarRelatorioFinanceiro() {
+        List<RelatorioFinanceiroVo> relatorio = vendaDAO.relatorioFinanceiro();
+        assertNotNull(relatorio);
+        assertFalse(relatorio.isEmpty());
+    }
+
+    private void popularBancoDeDados() {
+        // Popula o banco de dados real com dados para o teste
+        Categoria celulares = new Categoria("CELULARES");
+        Categoria videogames = new Categoria("VIDEOGAMES");
+        Categoria informatica = new Categoria("INFORMATICA");
+
+        Produto celular = new Produto("Xiaomi Redmi", "O preferido", new BigDecimal("800"), celulares);
+        Produto videogame = new Produto("PS5", "Playstation 5", new BigDecimal("8000"), videogames);
+        Produto macbook = new Produto("Macbook", "Macbook Pro", new BigDecimal("14000"), informatica);
+
+        Cliente cliente = new Cliente("Franciele", "123456");
+
+        Pedido pedido = new Pedido(cliente);
+        pedido.adicionarItem(new PedidoItem(10, pedido, celular));
+        pedido.adicionarItem(new PedidoItem(40, pedido, videogame));
+
+        Pedido pedido2 = new Pedido(cliente);
+        pedido2.adicionarItem(new PedidoItem(2, pedido2, macbook));
+
+        em.getTransaction().begin();
+
+        em.persist(celulares);
+        em.persist(videogames);
+        em.persist(informatica);
+
+        em.persist(celular);
+        em.persist(videogame);
+        em.persist(macbook);
+
+        em.persist(cliente);
+
+        em.persist(pedido);
+        em.persist(pedido2);
+
+        em.getTransaction().commit();
+    }
+}
+```

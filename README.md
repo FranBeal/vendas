@@ -1785,6 +1785,7 @@ public class Main {
 
 # Teste Unitário com JUnit
 O framework JUnit5 utiliza anotações para a identificação de métodos de teste. Por se tratar de testes unitários, eles não devem depender de outros testes para o seu funcionamento. Além das anotações, são usados métodos de asserções para validar as informações e verificar se o teste falhou ou se está ok. A seguir, as principais anotações do JUnit5:
+
     • @Test: é usado para anotar os métodos para serem executados como um teste;
     • @BeforeEach: método anotado com essa anotação será executado uma vez antes de cada método de teste anotado com @Test;
     • @AfterEach: método anotado com essa anotação será executado uma vez após cada método de teste anotado com @Test;
@@ -1792,12 +1793,14 @@ O framework JUnit5 utiliza anotações para a identificação de métodos de tes
     • @AfterAll: é executado após todos os testes;
 
 Os Asserts mais comuns são:
+
     • assertEquals (expected, actual): Afirma que os valores esperados e reais são iguais.
     • assertNotEquals(expected, actual): Afirma que os valores esperados e os valores reais não são iguais.
     • assertTrue(condition): Isto afirma se a condição dada é verdadeira. O caso de teste passa se for verdadeira e falha se não for.
     • assertFalse(condition): Isto afirma se a condição dada é falsa. O caso de teste passa se for falsa e falha se não for.
     • assertNull(value): Isso afirma se o valor fornecido é nulo. O caso de teste passa se for nulo e falha se não for.
     • assertNotNull(value): Isso afirma se o valor fornecido não é nulo. O caso de teste passa se não for nulo e falha se não for.
+    
 
 ## Classes de Teste do Projeto
 

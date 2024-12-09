@@ -2356,3 +2356,314 @@ public class VendaServiceTest {
     }
 }
 ```
+## Realizando melhorias no código
+
+### Tratamento de Erros
+
+O tratamento de erros pode ser melhorado com exceções personalizadas e uso de blocos try-catch. Isso ajuda a capturar exceções específicas. Neste projeto, iremos criar uma classe personalizada de exceção para lidar com erros de acesso a dados. Para isso, iremos criar um pacote chamado exception com a classe DataAccessException, conforme abaixo:
+
+```java
+// Classe personalizada de exceção para lidar com erros de acesso a dados.
+public class DataAccessException extends RuntimeException {
+
+    // Construtor que recebe uma mensagem e uma causa (exceção original).
+    public DataAccessException(String message, Throwable cause) {
+        // Passa a mensagem e a causa para o construtor da classe RuntimeException.
+        super(message, cause);
+    }
+}
+```
+
+A classe de exceção personalizada agora pode ser usada nas classes de acesso a dados, porém, antes será realizada uma melhoria no código dessas classes.
+
+### Criação de uma classe genérica DAO
+
+As operações básicas de persistência, tais como cadastrar, atualizar, remover, buscarPorId e buscarTodos, são repetitivas. Entretanto, isso pode ser abstraído em uma classe genérica, reduzindo duplicação e facilitando a manutenção.
+
+```java
+import br.com.exception.DataAccessException;// Exceção personalizada
+import jakarta.persistence.EntityManager;
+import java.util.List;
+
+// Classe genérica para operações CRUD no banco de dados.
+public abstract class GenericDao<T> {
+
+    protected EntityManager em; // Gerenciador de entidades (JPA).
+    private Class<T> entityClass; // Classe da entidade genérica.
+
+    public GenericDao(EntityManager em, Class<T> entityClass) {
+        this.em = em;
+        this.entityClass = entityClass;
+    }
+
+    // Metodo para cadastrar uma nova entidade.
+    public void cadastrar(T entity) {
+        try {
+            em.getTransaction().begin();// Inicia a transação.
+            em.persist(entity);// Persiste a entidade no banco de dados.
+            em.getTransaction().commit();// Confirma a transação.
+        } catch (Exception e) {
+            em.getTransaction().rollback();// Reverte a transação em caso de erro.
+
+            // Lança uma exceção personalizada com detalhes do erro.
+            throw new DataAccessException("Erro ao cadastrar a entidade: " + entity.getClass().getSimpleName(), e);
+        }
+    }
+
+    // Metodo para atualizar uma entidade existente.
+    public void atualizar(T entity) {
+        try {
+            em.getTransaction().begin();
+            em.merge(entity);
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            em.getTransaction().rollback();
+            throw new DataAccessException("Erro ao atualizar a entidade: " + entity.getClass().getSimpleName(), e);
+        }
+    }
+
+    // Metodo para remover uma entidade do banco de dados.
+    public void remover(T entity) {
+        try {
+            em.getTransaction().begin();
+            em.remove(entity);
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            em.getTransaction().rollback();
+            throw new DataAccessException("Erro ao atualizar a entidade: " + entity.getClass().getSimpleName(), e);
+        }
+    }
+
+    // Metodo para buscar uma entidade pelo ID.
+    public T buscarPorId(Long id) {
+        try {
+            return em.find(entityClass, id);// Busca a entidade pelo ID.
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao buscar o id: "+ id +" da entidade: "+ entityClass.getSimpleName(), e);
+        }
+    }
+
+    // Metodo para buscar todas as entidades de um tipo.
+    public List<T> buscarTodos() {
+        try {
+            // Monta uma consulta JPQL para buscar todas as entidades.
+            String jpql = "SELECT e FROM " + entityClass.getSimpleName() + " e";
+
+            return em.createQuery(jpql, entityClass).getResultList();
+            
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao buscar todos de: "+ entityClass.getSimpleName(), e);
+        }
+    }
+}
+```
+
+Agora, podemos fazer com que as classes DAO específicas herdem as funcionalidades básicas da classe DAO genérica:
+
+### Classe CategoriaDAO
+```java
+import br.com.exception.DataAccessException;
+import br.com.model.Categoria;
+import jakarta.persistence.EntityManager;
+
+import java.util.List;
+
+public class CategoriaDao extends GenericDao<Categoria>{
+
+	public CategoriaDao(EntityManager em) {
+		super(em, Categoria.class);
+	}
+
+
+	// Metodo para buscar categorias pelo nome.
+	public List<Categoria> buscarPorNome(String nome) {
+		try{
+			// Consulta JPQL para buscar categorias por nome.
+			String jpql = "SELECT c FROM Categoria c WHERE c.nome = :nome";
+
+			return em.createQuery(jpql, Categoria.class)
+				.setParameter("nome", nome) // Define o parâmetro "nome" na consulta.
+				.getResultList(); // Executa a consulta e retorna os resultados.
+
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar categorias por nome: " + nome, e);
+		}
+	}
+}
+```
+
+### Classe ClienteDAO
+```java
+import br.com.model.Cliente;
+import jakarta.persistence.EntityManager;
+
+public class ClienteDao extends GenericDao<Cliente>{
+
+	private EntityManager em;
+
+	public ClienteDao(EntityManager em) {
+		super(em, Cliente.class);
+	}
+}
+```
+
+### Classe ProdutoDAO
+```java
+import br.com.exception.DataAccessException;
+import br.com.model.Produto;
+import jakarta.persistence.EntityManager;
+import java.util.List;
+
+public class ProdutoDao extends GenericDao<Produto>{
+
+	public ProdutoDao(EntityManager em) {
+		super(em, Produto.class);
+	}
+
+	public List<Produto> buscarPorNome(String nome) {
+		try{
+			String jpql = "SELECT p FROM Produto p WHERE p.nome = :nome";
+			return em.createQuery(jpql, Produto.class)
+				.setParameter("nome", nome)
+				.getResultList();
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar produto por nome: " + nome, e);
+		}
+	}
+
+	public List<Produto> buscarPorCategoria(long idCategoria) {
+		try{
+			String jpql = "SELECT p FROM Produto p WHERE p.categoria.id = :id";
+			return em.createQuery(jpql, Produto.class)
+				.setParameter("id", idCategoria)
+				.getResultList();
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar produto por categoria", e);
+		}
+	}
+}
+```
+
+### Classe PedidoDAO
+```java
+import br.com.exception.DataAccessException;
+import br.com.model.Pedido;
+import br.com.model.PedidoItem;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDate;
+import java.util.List;
+
+public class PedidoDao extends GenericDao<Pedido>{
+
+	public PedidoDao(EntityManager em) {
+		super(em, Pedido.class);
+	}
+
+	public void removerItem(PedidoItem pedidoItem){
+		this.em.getTransaction().begin();
+		this.em.remove(pedidoItem);
+		this.em.getTransaction().commit();
+	}
+
+	public List<Pedido> buscarPedidosPorPeriodo(LocalDate dataIni, LocalDate dataFim) {
+		try{
+			String jpql = "SELECT p FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+			return em.createQuery(jpql, Pedido.class)
+				.setParameter("dataIni", dataIni)
+				.setParameter("dataFim", dataFim)
+				.getResultList();
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar pedidos por período: ", e);
+		}
+	}
+
+	public List<Pedido> buscarPedidosDeUmCliente(Long id) {
+		try{
+			String jpql = "SELECT p FROM Pedido p JOIN FETCH p.cliente WHERE p.cliente.id = :id";
+			return em.createQuery(jpql, Pedido.class)
+				.setParameter("id", id)
+				.getResultList();
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar pedidos por id de cliente", e);
+		}
+	}
+}
+```
+
+A classe VendaDAO não herda da GenericDAO, pois não realiza operações de CRUD, porém, ela apresenta melhorias relacionadas ao tratamento de erros:
+```java
+import br.com.exception.DataAccessException;
+import br.com.vo.RelatorioDeVendasVo;
+import br.com.vo.RelatorioFinanceiroVo;
+import jakarta.persistence.EntityManager;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+public class VendaDAO {
+
+    private EntityManager em;
+
+    public VendaDAO(EntityManager em) {
+        this.em = em;
+    }
+
+    public BigDecimal retornaValorTotalVendidoEmUmPeriodo(LocalDate dataIni, LocalDate dataFim) {
+        try{
+            String jpql = "SELECT SUM(p.valorTotal) FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+            BigDecimal total = em.createQuery(jpql, BigDecimal.class)
+                .setParameter("dataIni", dataIni)
+                .setParameter("dataFim", dataFim)
+                .getSingleResult();
+            if (total == null) {
+                return BigDecimal.ZERO;
+            }
+            return total;
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar valor total vendido em um período", e);
+        }
+    }
+
+    /* SELECT NEW em JPQL é indicado em situações onde se quer apenas uma parte dos dados das entidades e
+       se quer encapsulá-los num objeto específico, como um VO (Value Object), por exemplo. É muito utilizado
+       para gerar relatórios ou resumos que utilizam funções de agregação tais: como sum, max, min, count.
+       Resumindo: utiliza-se o select new quando o resultado da consulta não é uma entidade mapeada,
+       desta forma, é necessário indicar a classe que será retornada. */
+    public List<RelatorioDeVendasVo> relatorioDeVendas() {
+        try{
+            String jpql = "SELECT new br.com.vo.RelatorioDeVendasVo("
+                + "produto.nome, "
+                + "SUM(item.quantidade), "
+                + "MAX(pedido.data)) "
+                + "FROM Pedido pedido "
+                + "JOIN pedido.itens item "
+                + "JOIN item.produto produto "
+                + "GROUP BY produto.nome "
+                + "ORDER BY SUM(item.quantidade) DESC";
+            return em.createQuery(jpql, RelatorioDeVendasVo.class)
+                .getResultList();
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar o relatório de vendas", e);
+        }
+    }
+
+    public List<RelatorioFinanceiroVo> relatorioFinanceiro() {
+        try{
+            String jpql = "SELECT new br.com.vo.RelatorioFinanceiroVo("
+                + "cliente.nome, "
+                + "SUM(pedido.valorTotal)) "
+                + "FROM Pedido pedido "
+                + "JOIN pedido.cliente cliente "
+                + "GROUP BY cliente.nome "
+                + "ORDER BY SUM(pedido.valorTotal) DESC";
+            return em.createQuery(jpql, RelatorioFinanceiroVo.class)
+                .getResultList();
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar o relatório financeiro", e);
+        }
+    }
+}
+```
+
+

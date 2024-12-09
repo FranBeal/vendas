@@ -18,6 +18,7 @@ public class Produto {
 	private BigDecimal preco;
 
 	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "categoria_id")
 	private Categoria categoria;
 
 	public Produto() {

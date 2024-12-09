@@ -40,6 +40,5 @@ public class ProdutoService {
     public List<Produto> buscarProdutosDaCategoria(long idCategoria){
         return produtoDao.buscarPorCategoria(idCategoria);
     }
-
 }
 

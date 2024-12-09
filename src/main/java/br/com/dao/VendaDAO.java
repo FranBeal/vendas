@@ -1,5 +1,6 @@
 package br.com.dao;
 
+import br.com.exception.DataAccessException;
 import br.com.vo.RelatorioDeVendasVo;
 import br.com.vo.RelatorioFinanceiroVo;
 import jakarta.persistence.EntityManager;
@@ -17,15 +18,19 @@ public class VendaDAO {
     }
 
     public BigDecimal retornaValorTotalVendidoEmUmPeriodo(LocalDate dataIni, LocalDate dataFim) {
-        String jpql = "SELECT SUM(p.valorTotal) FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
-        BigDecimal total = em.createQuery(jpql, BigDecimal.class)
+        try{
+            String jpql = "SELECT SUM(p.valorTotal) FROM Pedido p WHERE p.data BETWEEN :dataIni AND :dataFim";
+            BigDecimal total = em.createQuery(jpql, BigDecimal.class)
                 .setParameter("dataIni", dataIni)
                 .setParameter("dataFim", dataFim)
                 .getSingleResult();
-        if (total == null) {
-            return BigDecimal.ZERO;
+            if (total == null) {
+                return BigDecimal.ZERO;
+            }
+            return total;
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar valor total vendido em um período", e);
         }
-        return total;
     }
 
     /* SELECT NEW em JPQL é indicado em situações onde se quer apenas uma parte dos dados das entidades e
@@ -34,7 +39,8 @@ public class VendaDAO {
        Resumindo: utiliza-se o select new quando o resultado da consulta não é uma entidade mapeada,
        desta forma, é necessário indicar a classe que será retornada. */
     public List<RelatorioDeVendasVo> relatorioDeVendas() {
-        String jpql = "SELECT new br.com.vo.RelatorioDeVendasVo("
+        try{
+            String jpql = "SELECT new br.com.vo.RelatorioDeVendasVo("
                 + "produto.nome, "
                 + "SUM(item.quantidade), "
                 + "MAX(pedido.data)) "
@@ -43,19 +49,26 @@ public class VendaDAO {
                 + "JOIN item.produto produto "
                 + "GROUP BY produto.nome "
                 + "ORDER BY SUM(item.quantidade) DESC";
-        return em.createQuery(jpql, RelatorioDeVendasVo.class)
+            return em.createQuery(jpql, RelatorioDeVendasVo.class)
                 .getResultList();
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar o relatório de vendas", e);
+        }
     }
 
     public List<RelatorioFinanceiroVo> relatorioFinanceiro() {
-        String jpql = "SELECT new br.com.vo.RelatorioFinanceiroVo("
+        try{
+            String jpql = "SELECT new br.com.vo.RelatorioFinanceiroVo("
                 + "cliente.nome, "
                 + "SUM(pedido.valorTotal)) "
                 + "FROM Pedido pedido "
                 + "JOIN pedido.cliente cliente "
                 + "GROUP BY cliente.nome "
                 + "ORDER BY SUM(pedido.valorTotal) DESC";
-        return em.createQuery(jpql, RelatorioFinanceiroVo.class)
+            return em.createQuery(jpql, RelatorioFinanceiroVo.class)
                 .getResultList();
+        } catch (Exception e) {
+            throw new DataAccessException("Erro ao retornar o relatório financeiro", e);
+        }
     }
 }

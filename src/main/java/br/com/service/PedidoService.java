@@ -3,7 +3,6 @@ package br.com.service;
 import br.com.dao.PedidoDao;
 import br.com.model.Pedido;
 import br.com.model.PedidoItem;
-import br.com.model.Produto;
 import jakarta.persistence.EntityManager;
 
 import java.time.LocalDate;
@@ -13,6 +12,7 @@ public class PedidoService {
     private PedidoDao pedidoDao;
 
     public PedidoService(EntityManager em){
+
         this.pedidoDao = new PedidoDao(em);
     }
 
@@ -31,7 +31,7 @@ public class PedidoService {
     public void excluirItem(PedidoItem pedidoItem){pedidoDao.removerItem(pedidoItem); }
 
     public Pedido buscarPedidoPorId(long id){
-        return pedidoDao.buscarPedidoPoriD(id);
+        return pedidoDao.buscarPorId(id);
     }
 
     public List<Pedido> buscarPedidoPorPeriodo(LocalDate dataIni, LocalDate dataFim){

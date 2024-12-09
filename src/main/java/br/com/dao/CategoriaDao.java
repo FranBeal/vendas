@@ -1,50 +1,29 @@
 package br.com.dao;
 
+import br.com.exception.DataAccessException;
 import br.com.model.Categoria;
 import jakarta.persistence.EntityManager;
-
 import java.util.List;
 
-public class CategoriaDao {
-	
-	private EntityManager em;
+public class CategoriaDao extends GenericDao<Categoria>{
 
 	public CategoriaDao(EntityManager em) {
-		this.em = em;
-	}
-	
-	public void cadastrar(Categoria categoria) {
-		this.em.getTransaction().begin();
-		this.em.persist(categoria);
-		this.em.getTransaction().commit();
-	}
-	
-	public void atualizar(Categoria categoria) {
-		this.em.getTransaction().begin();
-		this.em.merge(categoria);
-		this.em.getTransaction().commit();
-	}
-	
-	public void remover(Categoria categoria) {
-		this.em.getTransaction().begin();
-		this.em.remove(categoria);
-		this.em.getTransaction().commit();
+		super(em, Categoria.class);
 	}
 
-	public Categoria buscarPorId(Long id) {
-		return em.find(Categoria.class, id);
-	}
 
-	public List<Categoria> buscarTodos() {
-		String jpql = "SELECT c FROM Categoria c";
-		return em.createQuery(jpql, Categoria.class).getResultList();
-	}
-
+	// Metodo para buscar categorias pelo nome.
 	public List<Categoria> buscarPorNome(String nome) {
-		String jpql = "SELECT c FROM Categoria c WHERE c.nome = :nome";
-		return em.createQuery(jpql, Categoria.class)
-				.setParameter("nome", nome)
-				.getResultList();
-	}
+		try{
+			// Consulta JPQL para buscar categorias por nome.
+			String jpql = "SELECT c FROM Categoria c WHERE c.nome = :nome";
 
+			return em.createQuery(jpql, Categoria.class)
+				.setParameter("nome", nome) // Define o parâmetro "nome" na consulta.
+				.getResultList(); // Executa a consulta e retorna os resultados.
+
+		} catch (Exception e) {
+			throw new DataAccessException("Erro ao buscar categorias por nome: " + nome, e);
+		}
+	}
 }
